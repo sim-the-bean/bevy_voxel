@@ -1,0 +1,32 @@
+[package]
+name = "bevy_voxel"
+version = "0.1.0"
+authors = ["Szymon Walter <waltersz@protonmail.com>"]
+edition = "2018"
+license = "MIT"
+description = "A bundle of bevy plugins for voxel-based games"
+repository = "https://github.com/walterpie/bevy_voxel"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+rand = "0.7"
+line_drawing = "0.8"
+noise = "0.6"
+
+[dependencies.bevy]
+path = "../bevy"
+
+[dev-dependencies.bevy_fly_camera]
+path = "../bevy_fly_camera"
+
+[dependencies.serde]
+version = "1.0"
+features = ["derive"]
+optional = true
+
+[dev-dependencies]
+serde_json = "1.0"
+
+[features]
+default = ["serde"]
