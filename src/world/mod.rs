@@ -3,10 +3,9 @@ use bevy::prelude::*;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-pub use crate::collections::volumetric_tree::Node as ChunkNode;
 use crate::collections::{
-    volumetric_tree::{Element, ElementMut},
-    VolumetricTree,
+    lod_tree::{Element, ElementMut},
+    LodTree,
 };
 
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -66,7 +65,7 @@ pub type Lod = usize;
 #[derive(Debug, Clone, PartialEq)]
 pub struct Chunk<T> {
     position: ChunkKey,
-    data: Vec<VolumetricTree<T>>,
+    data: Vec<LodTree<T>>,
 }
 
 impl<T: Voxel> Default for Chunk<T> {
@@ -80,7 +79,7 @@ impl<T: Voxel> Chunk<T> {
         let mut data = Vec::new();
         for i in 0..size {
             let chunk_size = 2_usize.pow(size - i);
-            data.push(VolumetricTree::new(chunk_size));
+            data.push(LodTree::new(chunk_size));
         }
         Self { position, data }
     }
