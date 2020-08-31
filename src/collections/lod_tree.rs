@@ -1,7 +1,7 @@
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-use std::mem;
+use std::{borrow::Cow, collections::HashMap, mem};
 
 use int_traits::IntTraits;
 
@@ -14,8 +14,7 @@ fn depth_index(x: i32, y: i32, z: i32, depth: usize) -> usize {
     let mut y = y + width_2;
     let mut z = z + width_2;
 
-    for _ in 0..depth {
-        idx <<= 3;
+    for i in 0..depth {
         let bx = x & 1;
         let by = y & 1;
         let bz = z & 1;
@@ -24,35 +23,41 @@ fn depth_index(x: i32, y: i32, z: i32, depth: usize) -> usize {
         y >>= 1;
         z >>= 1;
 
-        idx |= bx as usize | (by as usize) << 1 | (bz as usize) << 2;
+        idx |= (bx as usize | (by as usize) << 1 | (bz as usize) << 2) << 3 * i;
     }
 
     idx
 }
 
-fn array_index(mut idx: usize, depth: usize) -> (i32, i32, i32) {
+fn array_index(idx: usize, depth: usize) -> (i32, i32, i32) {
     let width_2 = 1 << (depth - 1);
 
     let mut x = 0;
     let mut y = 0;
     let mut z = 0;
 
-    for _ in 0..depth {
-        let bx = idx as i32 & 1;
-        let by = (idx as i32 >> 1) & 1;
-        let bz = (idx as i32 >> 2) & 1;
+    for i in (0..depth).rev() {
+        let b = idx >> 3 * i;
+        let bx = b as i32 & 1;
+        let by = (b as i32 >> 1) & 1;
+        let bz = (b as i32 >> 2) & 1;
 
         x <<= 1;
         y <<= 1;
         z <<= 1;
 
-        x = x | bx;
-        y = y | by;
-        z = z | bz;
-
-        idx >>= 3;
+        x |= bx;
+        y |= by;
+        z |= bz;
     }
     (x - width_2, y - width_2, z - width_2)
+}
+
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Node<T> {
+    Ref(usize),
+    Value(Option<T>, usize),
 }
 
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -60,14 +65,14 @@ fn array_index(mut idx: usize, depth: usize) -> (i32, i32, i32) {
 pub struct LodTree<T> {
     depth: usize,
     len: usize,
-    array: Vec<Option<T>>,
+    array: Vec<Node<T>>,
 }
 
-impl<T> LodTree<T> {
+impl<T: Clone + PartialEq> LodTree<T> {
     pub fn new(width: usize) -> Self {
         let mut array = Vec::with_capacity(width.pow(3));
         for _ in 0..width.pow(3) {
-            array.push(None);
+            array.push(Node::Value(None, 1));
         }
         Self {
             depth: width.log2(),
@@ -94,11 +99,76 @@ impl<T> LodTree<T> {
 
     pub fn clear(&mut self) {
         for elem in &mut self.array {
-            *elem = None;
+            *elem = Node::Value(None, 1);
         }
     }
 
-    pub fn insert(&mut self, (x, y, z): (i32, i32, i32), value: T) -> Option<T> {
+    pub fn merge(&mut self) {
+        for d in 1..=self.depth {
+            let skip = 8_usize.pow(d as u32 - 1);
+
+            let mut merges = Vec::new();
+            let mut pivot = None;
+            let iter = self.array.iter().enumerate().filter_map(|(i, elem)| {
+                if i % skip == 0 {
+                    Some((i, elem))
+                } else {
+                    None
+                }
+            });
+
+            for (i, node) in iter {
+                if i & 7 == 0 {
+                    let mut i = i;
+                    let mut node = node;
+                    pivot = loop {
+                        match node {
+                            Node::Ref(idx) => {
+                                node = &self.array[*idx];
+                                i = *idx;
+                            }
+                            Node::Value(value, _) => break Some((value, i)),
+                        }
+                    };
+                    continue;
+                }
+                if let Some((pivot, pivot_idx)) = pivot {
+                    let mut i = i;
+                    let mut node = node;
+                    let elem = loop {
+                        match node {
+                            Node::Ref(idx) => {
+                                node = &self.array[*idx];
+                                i = *idx;
+                            }
+                            Node::Value(value, _) => break value,
+                        }
+                    };
+                    if elem == pivot {
+                        merges.push((i, pivot_idx));
+                    }
+                }
+            }
+
+            let mut pivot_map = HashMap::<_, usize>::new();
+            for (idx, pivot_idx) in merges {
+                *pivot_map.entry(pivot_idx).or_default() += 1;
+                self.array[idx] = Node::Ref(pivot_idx);
+            }
+
+            for (pivot_idx, count) in pivot_map {
+                debug_assert!(count < 8, "count is not < 8: {}", count);
+                if count == 7 {
+                    match &mut self.array[pivot_idx] {
+                        Node::Value(_, width) => *width *= 2,
+                        _ => unreachable!(),
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn insert(&mut self, (x, y, z): (i32, i32, i32), value: T) -> Option<Cow<'_, T>> {
         if x >= self.width() as i32 / 2
             || x < self.width() as i32 / -2
             || y >= self.width() as i32 / 2
@@ -109,15 +179,36 @@ impl<T> LodTree<T> {
             return None;
         }
         let idx = depth_index(x, y, z, self.depth);
-        let mut result = Some(value);
+        let mut result = Node::Value(Some(value), 1);
         mem::swap(&mut self.array[idx], &mut result);
-        if result.is_none() {
-            self.len += 1;
+
+        let mut result_ref;
+        let mut depth = 0;
+        match result {
+            Node::Ref(idx) => {
+                depth += 1;
+                result_ref = &mut self.array[idx] as *mut _;
+            }
+            Node::Value(value, _) => {
+                return value.map(Cow::Owned);
+            }
         }
-        result
+
+        loop {
+            match unsafe { &mut *result_ref } {
+                Node::Ref(idx) => {
+                    depth += 1;
+                    result_ref = &mut self.array[*idx] as *mut _;
+                }
+                Node::Value(value, width) => {
+                    *width >>= depth;
+                    return value.as_ref().map(Cow::Borrowed);
+                }
+            }
+        }
     }
 
-    pub fn remove(&mut self, (x, y, z): (i32, i32, i32)) -> Option<T> {
+    pub fn remove(&mut self, (x, y, z): (i32, i32, i32)) -> Option<Cow<'_, T>> {
         if x >= self.width() as i32 / 2
             || x < self.width() as i32 / -2
             || y >= self.width() as i32 / 2
@@ -128,12 +219,33 @@ impl<T> LodTree<T> {
             return None;
         }
         let idx = depth_index(x, y, z, self.depth);
-        let mut result = None;
+        let mut result = Node::Value(None, 1);
         mem::swap(&mut self.array[idx], &mut result);
-        if result.is_some() {
-            self.len -= 1;
+
+        let mut result_ref;
+        let mut depth = 0;
+        match result {
+            Node::Ref(idx) => {
+                depth += 1;
+                result_ref = &mut self.array[idx] as *mut _;
+            }
+            Node::Value(value, _) => {
+                return value.map(Cow::Owned);
+            }
         }
-        result
+
+        loop {
+            match unsafe { &mut *result_ref } {
+                Node::Ref(idx) => {
+                    depth += 1;
+                    result_ref = &mut self.array[*idx] as *mut _;
+                }
+                Node::Value(value, width) => {
+                    *width >>= depth;
+                    return value.as_ref().map(Cow::Borrowed);
+                }
+            }
+        }
     }
 
     pub fn get(&self, (x, y, z): (i32, i32, i32)) -> Option<&T> {
@@ -147,7 +259,16 @@ impl<T> LodTree<T> {
             return None;
         }
         let idx = depth_index(x, y, z, self.depth);
-        self.array[idx].as_ref()
+        let mut result_ref = &self.array[idx];
+
+        loop {
+            match result_ref {
+                Node::Ref(idx) => {
+                    result_ref = &self.array[*idx];
+                }
+                Node::Value(value, _) => return value.as_ref(),
+            }
+        }
     }
 
     pub fn get_mut(&mut self, (x, y, z): (i32, i32, i32)) -> Option<&mut T> {
@@ -161,7 +282,16 @@ impl<T> LodTree<T> {
             return None;
         }
         let idx = depth_index(x, y, z, self.depth);
-        self.array[idx].as_mut()
+        let mut result_ref = &mut self.array[idx] as *mut _;
+
+        loop {
+            match unsafe { &mut *result_ref } {
+                Node::Ref(idx) => {
+                    result_ref = &mut self.array[*idx] as *mut _;
+                }
+                Node::Value(value, _) => return value.as_mut(),
+            }
+        }
     }
 
     pub fn contains_key(&self, coords: (i32, i32, i32)) -> bool {
@@ -170,33 +300,57 @@ impl<T> LodTree<T> {
 
     pub fn elements(&self) -> impl Iterator<Item = Element<'_, T>> {
         let depth = self.depth;
-        self.array.iter().enumerate().flat_map(move |(i, value)| {
-            value.as_ref().map(|value| {
-                let (x, y, z) = array_index(i, depth);
-                Element {
-                    x,
-                    y,
-                    z,
-                    width: 1,
-                    value,
-                }
+        let array = &self.array[..];
+        array
+            .iter()
+            .enumerate()
+            .flat_map(move |(mut i, mut value)| {
+                let (idx, value, width) = loop {
+                    match value {
+                        Node::Ref(idx) => {
+                            value = &array[*idx];
+                            i = *idx;
+                        }
+                        Node::Value(value, width) => break (i, value, *width),
+                    }
+                };
+                value.as_ref().map(|value| {
+                    let (x, y, z) = array_index(idx, depth);
+                    Element {
+                        x,
+                        y,
+                        z,
+                        width,
+                        value,
+                    }
+                })
             })
-        })
     }
 
     pub fn elements_mut(&mut self) -> impl Iterator<Item = ElementMut<'_, T>> {
         let depth = self.depth;
+        let array = &mut self.array as *mut Vec<_>;
         self.array
             .iter_mut()
             .enumerate()
-            .flat_map(move |(i, value)| {
+            .flat_map(move |(mut i, mut value)| {
+                let (idx, value, width) = loop {
+                    match value {
+                        Node::Ref(idx) => {
+                            let array = unsafe { &mut *array };
+                            value = &mut array[*idx];
+                            i = *idx;
+                        }
+                        Node::Value(value, width) => break (i, value, *width),
+                    }
+                };
                 value.as_mut().map(|value| {
-                    let (x, y, z) = array_index(i, depth);
+                    let (x, y, z) = array_index(idx, depth);
                     ElementMut {
                         x,
                         y,
                         z,
-                        width: 1,
+                        width,
                         value,
                     }
                 })
@@ -206,7 +360,16 @@ impl<T> LodTree<T> {
 
 impl<T: PartialEq> LodTree<T> {
     pub fn position(&self, value: &T) -> Option<(i32, i32, i32)> {
-        for (i, elem) in self.array.iter().enumerate() {
+        for (mut i, mut elem) in self.array.iter().enumerate() {
+            let elem = loop {
+                match elem {
+                    Node::Ref(idx) => {
+                        elem = &self.array[*idx];
+                        i = *idx;
+                    }
+                    Node::Value(value, _) => break value,
+                }
+            };
             if elem.as_ref() == Some(value) {
                 return Some(array_index(i, self.depth));
             }
@@ -240,6 +403,15 @@ pub struct ElementMut<'a, T> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    pub fn index() {
+        let depth = 2;
+        let idx0 = 3;
+        let (x, y, z) = array_index(idx0, depth);
+        let idx1 = depth_index(x, y, z, depth);
+        assert_eq!(idx0, idx1);
+    }
 
     #[test]
     pub fn insert() {
@@ -371,5 +543,65 @@ mod tests {
                 ]
                 .contains(&elem)
             }));
+    }
+
+    #[test]
+    pub fn small() {
+        let mut vt = LodTree::<i32>::new(4);
+        vt.insert((-1, -1, -1), 0);
+        vt.insert((-1, -1, -2), 0);
+        vt.insert((-1, -2, -1), 0);
+        vt.insert((-1, -2, -2), 0);
+        vt.insert((-2, -1, -1), 0);
+        vt.insert((-2, -1, -2), 0);
+        vt.insert((-2, -2, -1), 0);
+        vt.insert((-2, -2, -2), 0);
+
+        vt.merge();
+
+        println!("{:?}", vt);
+    }
+
+    #[test]
+    pub fn merge() {
+        let mut vt = LodTree::<i32>::new(8);
+        vt.insert((2, 2, 2), 0);
+        vt.insert((2, 2, 3), 0);
+        vt.insert((2, 3, 2), 0);
+        vt.insert((2, 3, 3), 0);
+        vt.insert((3, 2, 2), 0);
+        vt.insert((3, 2, 3), 0);
+        vt.insert((3, 3, 2), 0);
+        vt.insert((3, 3, 3), 0);
+
+        vt.merge();
+
+        assert_eq!(vt.position(&0), Some((2, 2, 2)));
+
+        assert_eq!(vt.get((2, 2, 2)), Some(&0));
+        assert_eq!(vt.get((2, 2, 3)), Some(&0));
+        assert_eq!(vt.get((2, 3, 2)), Some(&0));
+        assert_eq!(vt.get((2, 3, 3)), Some(&0));
+        assert_eq!(vt.get((3, 2, 2)), Some(&0));
+        assert_eq!(vt.get((3, 2, 3)), Some(&0));
+        assert_eq!(vt.get((3, 3, 2)), Some(&0));
+        assert_eq!(vt.get((3, 3, 3)), Some(&0));
+
+        let a = vt.get((2, 2, 2)).unwrap() as *const _;
+        let b = vt.get((2, 2, 3)).unwrap() as *const _;
+        let c = vt.get((2, 3, 2)).unwrap() as *const _;
+        let d = vt.get((2, 3, 3)).unwrap() as *const _;
+        let e = vt.get((3, 2, 2)).unwrap() as *const _;
+        let f = vt.get((3, 2, 3)).unwrap() as *const _;
+        let g = vt.get((3, 3, 2)).unwrap() as *const _;
+        let h = vt.get((3, 3, 3)).unwrap() as *const _;
+
+        assert_eq!(a, b);
+        assert_eq!(a, c);
+        assert_eq!(a, d);
+        assert_eq!(a, e);
+        assert_eq!(a, f);
+        assert_eq!(a, g);
+        assert_eq!(a, h);
     }
 }

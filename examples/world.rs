@@ -1,8 +1,4 @@
-use bevy::{
-    asset::Handle,
-    prelude::*,
-    render::mesh::Mesh,
-};
+use bevy::{asset::Handle, prelude::*, render::mesh::Mesh};
 
 use bevy_voxel::{
     render::{

@@ -84,6 +84,12 @@ impl<T: Voxel> Chunk<T> {
         Self { position, data }
     }
 
+    pub fn merge(&mut self) {
+        for data in &mut self.data {
+            data.merge();
+        }
+    }
+
     fn update_lod(&mut self, mut coords: (i32, i32, i32)) {
         for lod in 0..self.data.len() - 1 {
             let (mut x, mut y, mut z) = coords;
