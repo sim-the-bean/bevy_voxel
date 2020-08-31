@@ -1,8 +1,7 @@
 use bevy::{
     asset::Handle,
     prelude::*,
-    render::{camera::ActiveCameras, mesh::Mesh},
-    transform::prelude::Translation,
+    render::mesh::Mesh,
 };
 
 use bevy_voxel::{

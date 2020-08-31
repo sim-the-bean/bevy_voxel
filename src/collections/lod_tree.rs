@@ -5,20 +5,6 @@ use std::mem;
 
 use int_traits::IntTraits;
 
-fn sp_index(x: i32, y: i32, z: i32) -> usize {
-    let x = x as usize;
-    let y = y as usize;
-    let z = z as usize;
-    x | y << 1 | z << 2
-}
-
-fn dir_index(idx: usize) -> (i32, i32, i32) {
-    let x = idx & 1;
-    let y = (idx >> 1) & 1;
-    let z = (idx >> 2) & 1;
-    (x as i32, y as i32, z as i32)
-}
-
 fn depth_index(x: i32, y: i32, z: i32, depth: usize) -> usize {
     let width_2 = 1 << (depth - 1);
 
@@ -51,7 +37,7 @@ fn array_index(mut idx: usize, depth: usize) -> (i32, i32, i32) {
     let mut y = 0;
     let mut z = 0;
 
-    for i in 0..depth {
+    for _ in 0..depth {
         let bx = idx as i32 & 1;
         let by = (idx as i32 >> 1) & 1;
         let bz = (idx as i32 >> 2) & 1;
@@ -67,33 +53,6 @@ fn array_index(mut idx: usize, depth: usize) -> (i32, i32, i32) {
         idx >>= 3;
     }
     (x - width_2, y - width_2, z - width_2)
-}
-
-fn array_index_from(
-    (ax, ay, az): (i32, i32, i32),
-    mut idx: usize,
-    depth: usize,
-) -> (i32, i32, i32) {
-    let mut x = 0;
-    let mut y = 0;
-    let mut z = 0;
-
-    for i in 0..depth {
-        let bx = idx as i32 & 1;
-        let by = (idx as i32 >> 1) & 1;
-        let bz = (idx as i32 >> 2) & 1;
-
-        x <<= 1;
-        y <<= 1;
-        z <<= 1;
-
-        x = x | bx;
-        y = y | by;
-        z = z | bz;
-
-        idx >>= 3;
-    }
-    (x + ax, y + ay, z + az)
 }
 
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
