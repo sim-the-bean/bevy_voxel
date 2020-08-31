@@ -21,7 +21,7 @@ fn dir_index(idx: usize) -> (i32, i32, i32) {
 
 fn depth_index(x: i32, y: i32, z: i32, depth: usize) -> usize {
     let width_2 = 1 << (depth - 1);
-    
+
     let mut idx = 0;
 
     let mut x = x + width_2;
@@ -40,13 +40,13 @@ fn depth_index(x: i32, y: i32, z: i32, depth: usize) -> usize {
 
         idx |= bx as usize | (by as usize) << 1 | (bz as usize) << 2;
     }
-    
+
     idx
 }
 
 fn array_index(mut idx: usize, depth: usize) -> (i32, i32, i32) {
     let width_2 = 1 << (depth - 1);
-    
+
     let mut x = 0;
     let mut y = 0;
     let mut z = 0;
@@ -59,17 +59,21 @@ fn array_index(mut idx: usize, depth: usize) -> (i32, i32, i32) {
         x <<= 1;
         y <<= 1;
         z <<= 1;
-        
+
         x = x | bx;
         y = y | by;
         z = z | bz;
-                
+
         idx >>= 3;
     }
     (x - width_2, y - width_2, z - width_2)
 }
 
-fn array_index_from((ax, ay, az): (i32, i32, i32), mut idx: usize, depth: usize) -> (i32, i32, i32) {
+fn array_index_from(
+    (ax, ay, az): (i32, i32, i32),
+    mut idx: usize,
+    depth: usize,
+) -> (i32, i32, i32) {
     let mut x = 0;
     let mut y = 0;
     let mut z = 0;
@@ -82,11 +86,11 @@ fn array_index_from((ax, ay, az): (i32, i32, i32), mut idx: usize, depth: usize)
         x <<= 1;
         y <<= 1;
         z <<= 1;
-        
+
         x = x | bx;
         y = y | by;
         z = z | bz;
-                
+
         idx >>= 3;
     }
     (x + ax, y + ay, z + az)
@@ -223,18 +227,21 @@ impl<T> LodTree<T> {
 
     pub fn elements_mut(&mut self) -> impl Iterator<Item = ElementMut<'_, T>> {
         let depth = self.depth;
-        self.array.iter_mut().enumerate().flat_map(move |(i, value)| {
-            value.as_mut().map(|value| {
-                let (x, y, z) = array_index(i, depth);
-                ElementMut {
-                    x,
-                    y,
-                    z,
-                    width: 1,
-                    value,
-                }
+        self.array
+            .iter_mut()
+            .enumerate()
+            .flat_map(move |(i, value)| {
+                value.as_mut().map(|value| {
+                    let (x, y, z) = array_index(i, depth);
+                    ElementMut {
+                        x,
+                        y,
+                        z,
+                        width: 1,
+                        value,
+                    }
+                })
             })
-        })
     }
 }
 
@@ -372,17 +379,17 @@ mod tests {
         vt.insert((-1, -1, -1), -1);
         vt.insert((0, 0, 0), 2);
 
-        assert!(
-            vt.elements()
-                .map(|elem| ((elem.x, elem.y, elem.z), *elem.value, elem.width))
-                .all(|elem| {
-                    [
-                        ((-2, -2, -2), -2, 1),
-                        ((-1, -1, -1), -1, 1),
-                        ((0, 0, 0), 2, 1),
-                    ].contains(&elem)
-                })
-        );
+        assert!(vt
+            .elements()
+            .map(|elem| ((elem.x, elem.y, elem.z), *elem.value, elem.width))
+            .all(|elem| {
+                [
+                    ((-2, -2, -2), -2, 1),
+                    ((-1, -1, -1), -1, 1),
+                    ((0, 0, 0), 2, 1),
+                ]
+                .contains(&elem)
+            }));
     }
 
     #[test]
@@ -393,17 +400,17 @@ mod tests {
         vt.insert((0, 0, 0), 0);
         vt.insert((1, 1, 1), 1);
 
-        assert!(
-            vt.elements()
-                .map(|elem| ((elem.x, elem.y, elem.z), *elem.value, elem.width))
-                .all(|elem| {
-                    [
-                        ((-2, -2, -2), -2, 1),
-                        ((-1, -1, -1), -1, 1),
-                        ((0, 0, 0), 0, 1),
-                        ((1, 1, 1), 1, 1),
-                    ].contains(&elem)
-                })
-        );
+        assert!(vt
+            .elements()
+            .map(|elem| ((elem.x, elem.y, elem.z), *elem.value, elem.width))
+            .all(|elem| {
+                [
+                    ((-2, -2, -2), -2, 1),
+                    ((-1, -1, -1), -1, 1),
+                    ((0, 0, 0), 0, 1),
+                    ((1, 1, 1), 1, 1),
+                ]
+                .contains(&elem)
+            }));
     }
 }
