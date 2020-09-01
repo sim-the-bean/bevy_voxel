@@ -2,8 +2,9 @@ use bevy::{asset::Handle, prelude::*, render::mesh::Mesh};
 
 use bevy_voxel::{
     render::{
-        entity::{generate_chunk_mesh, Block, ChunkMeshUpdate, CurrentLod},
+        entity::{generate_chunk_mesh, Block, ChunkMeshUpdate},
         light::*,
+        lod::lod_update,
         prelude::*,
     },
     terrain::*,
@@ -65,12 +66,13 @@ pub fn main() {
         })
         .add_resource(AmbientLight { intensity: 0.05 })
         .add_resource(params)
-        .add_system_to_stage(stage::PRE_UPDATE, terrain_generation.system())
-        .add_system_to_stage(stage::PRE_UPDATE, chunk_update.system())
+        .add_system_to_stage(stage::PRE_UPDATE, lod_update.system())
+        .add_system_to_stage(stage::UPDATE, terrain_generation.system())
         .add_system_to_stage(
-            stage::PRE_UPDATE,
+            stage::UPDATE,
             shaded_light_update::<line_drawing::WalkVoxels<f32, i32>>.system(),
         )
+        .add_system_to_stage(stage::POST_UPDATE, chunk_update.system())
         .run();
 }
 
@@ -87,7 +89,7 @@ fn setup(
         for cy in 0..world_height {
             for cz in -world_width_2..world_width_2 {
                 let chunk = Chunk::new(1, (cx, cy, cz));
-                let mesh = meshes.add(generate_chunk_mesh(&chunk, 0));
+                let mesh = meshes.add(generate_chunk_mesh(&chunk));
                 // add entities to the world
                 commands
                     // chunk
@@ -113,17 +115,12 @@ fn setup(
 
 fn chunk_update(
     mut meshes: ResMut<Assets<Mesh>>,
-    mut query: Query<(
-        &Chunk<Block>,
-        &mut ChunkMeshUpdate,
-        &Handle<Mesh>,
-        &CurrentLod,
-    )>,
+    mut query: Query<(&Chunk<Block>, &mut ChunkMeshUpdate, &Handle<Mesh>)>,
 ) {
-    for (chunk, mut update, chunk_mesh, current_lod) in &mut query.iter() {
+    for (chunk, mut update, chunk_mesh) in &mut query.iter() {
         if update.update_mesh {
             update.update_mesh = false;
-            let mesh = generate_chunk_mesh(&chunk, current_lod.get());
+            let mesh = generate_chunk_mesh(&chunk);
             *meshes.get_mut(&chunk_mesh).unwrap() = mesh;
         }
     }

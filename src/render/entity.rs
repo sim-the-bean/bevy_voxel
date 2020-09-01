@@ -15,8 +15,9 @@ use bevy::{
 };
 
 use crate::{
+    collections::lod_tree::Voxel,
     render::{material::VoxelMaterial, render_graph::pipeline},
-    world::{Chunk, Lod, Shade, Voxel},
+    world::{Chunk, Shade},
 };
 
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -28,7 +29,7 @@ pub struct Block {
 
 impl Voxel for Block {
     fn average(data: &[Self]) -> Option<Self> {
-        if data.len() < 4 {
+        if data.is_empty() {
             return None;
         }
 
@@ -87,17 +88,6 @@ pub struct ChunkMeshUpdate {
     pub generate_chunk: bool,
 }
 
-#[derive(Default, Debug, Clone, Copy)]
-pub struct CurrentLod {
-    pub lod: Option<usize>,
-}
-
-impl CurrentLod {
-    pub fn get(&self) -> usize {
-        self.lod.unwrap_or_default()
-    }
-}
-
 #[derive(Bundle)]
 pub struct ChunkRenderComponents {
     pub chunk: Chunk<Block>,
@@ -111,7 +101,6 @@ pub struct ChunkRenderComponents {
     pub translation: Translation,
     pub rotation: Rotation,
     pub scale: Scale,
-    pub lod: CurrentLod,
 }
 
 impl Default for ChunkRenderComponents {
@@ -149,7 +138,6 @@ impl Default for ChunkRenderComponents {
             translation: Default::default(),
             rotation: Default::default(),
             scale: Default::default(),
-            lod: Default::default(),
         }
     }
 }
@@ -165,7 +153,7 @@ fn generate_front_side<T: Voxel>(
 ) -> Option<([[f32; 3]; 4], [f32; 4], [[f32; 4]; 4])> {
     for dx in 0..width as i32 {
         for dy in 0..width as i32 {
-            if chunk.get((x + dx, y + dy, z + width as i32)).is_none() {
+            if !chunk.contains_key((x + dx, y + dy, z + width as i32)) {
                 let size = width as f32;
                 let x = x as f32 + offset.0;
                 let y = y as f32 + offset.1;
@@ -209,7 +197,7 @@ fn generate_back_side<T: Voxel>(
 ) -> Option<([[f32; 3]; 4], [f32; 4], [[f32; 4]; 4])> {
     for dx in 0..width as i32 {
         for dy in 0..width as i32 {
-            if chunk.get((x + dx, y + dy, z - 1)).is_none() {
+            if !chunk.contains_key((x + dx, y + dy, z - 1)) {
                 let size = width as f32;
                 let x = x as f32 + offset.0;
                 let y = y as f32 + offset.1;
@@ -253,7 +241,7 @@ fn generate_right_side<T: Voxel>(
 ) -> Option<([[f32; 3]; 4], [f32; 4], [[f32; 4]; 4])> {
     for dy in 0..width as i32 {
         for dz in 0..width as i32 {
-            if chunk.get((x - 1, y + dy, z + dz)).is_none() {
+            if !chunk.contains_key((x - 1, y + dy, z + dz)) {
                 let size = width as f32;
                 let x = x as f32 + offset.0;
                 let y = y as f32 + offset.1;
@@ -297,7 +285,7 @@ fn generate_left_side<T: Voxel>(
 ) -> Option<([[f32; 3]; 4], [f32; 4], [[f32; 4]; 4])> {
     for dy in 0..width as i32 {
         for dz in 0..width as i32 {
-            if chunk.get((x + width as i32, y + dy, z + dz)).is_none() {
+            if !chunk.contains_key((x + width as i32, y + dy, z + dz)) {
                 let size = width as f32;
                 let x = x as f32 + offset.0;
                 let y = y as f32 + offset.1;
@@ -341,7 +329,7 @@ fn generate_top_side<T: Voxel>(
 ) -> Option<([[f32; 3]; 4], [f32; 4], [[f32; 4]; 4])> {
     for dx in 0..width as i32 {
         for dz in 0..width as i32 {
-            if chunk.get((x + dx, y + width as i32, z + dz)).is_none() {
+            if !chunk.contains_key((x + dx, y + width as i32, z + dz)) {
                 let size = width as f32;
                 let x = x as f32 + offset.0;
                 let y = y as f32 + offset.1;
@@ -385,7 +373,7 @@ fn generate_bottom_side<T: Voxel>(
 ) -> Option<([[f32; 3]; 4], [f32; 4], [[f32; 4]; 4])> {
     for dx in 0..width as i32 {
         for dz in 0..width as i32 {
-            if chunk.get((x + dx, y - 1, z + dz)).is_none() {
+            if !chunk.contains_key((x + dx, y - 1, z + dz)) {
                 let size = width as f32;
                 let x = x as f32 + offset.0;
                 let y = y as f32 + offset.1;
@@ -418,7 +406,7 @@ fn generate_bottom_side<T: Voxel>(
     None
 }
 
-pub fn generate_chunk_mesh<T: Voxel>(chunk: &Chunk<T>, lod: Lod) -> Mesh {
+pub fn generate_chunk_mesh<T: Voxel>(chunk: &Chunk<T>) -> Mesh {
     let mut positions = Vec::new();
     let mut shades = Vec::new();
     let mut colors = Vec::new();
@@ -426,86 +414,62 @@ pub fn generate_chunk_mesh<T: Voxel>(chunk: &Chunk<T>, lod: Lod) -> Mesh {
     let mut n = 0;
 
     let coords = chunk.position();
-    let chunk_width = chunk.width(0) as f32;
+    let chunk_width = chunk.width() as f32;
     let cx = coords.0 as f32 * chunk_width;
     let cy = coords.1 as f32 * chunk_width;
     let cz = coords.2 as f32 * chunk_width;
 
-    for elem in chunk.iter(lod) {
+    for elem in chunk.iter() {
         let top = generate_top_side(
-            elem.value,
+            &*elem.value,
             chunk,
-            (
-                elem.x * 2_i32.pow(lod as _),
-                elem.y * 2_i32.pow(lod as _),
-                elem.z * 2_i32.pow(lod as _),
-            ),
-            elem.width * 2_usize.pow(lod as _),
+            (elem.x, elem.y, elem.z),
+            elem.width,
             (cx, cy, cz),
             &mut indices,
             &mut n,
         );
         let bottom = generate_bottom_side(
-            elem.value,
+            &*elem.value,
             chunk,
-            (
-                elem.x * 2_i32.pow(lod as _),
-                elem.y * 2_i32.pow(lod as _),
-                elem.z * 2_i32.pow(lod as _),
-            ),
-            elem.width * 2_usize.pow(lod as _),
+            (elem.x, elem.y, elem.z),
+            elem.width,
             (cx, cy, cz),
             &mut indices,
             &mut n,
         );
         let right = generate_right_side(
-            elem.value,
+            &*elem.value,
             chunk,
-            (
-                elem.x * 2_i32.pow(lod as _),
-                elem.y * 2_i32.pow(lod as _),
-                elem.z * 2_i32.pow(lod as _),
-            ),
-            elem.width * 2_usize.pow(lod as _),
+            (elem.x, elem.y, elem.z),
+            elem.width,
             (cx, cy, cz),
             &mut indices,
             &mut n,
         );
         let left = generate_left_side(
-            elem.value,
+            &*elem.value,
             chunk,
-            (
-                elem.x * 2_i32.pow(lod as _),
-                elem.y * 2_i32.pow(lod as _),
-                elem.z * 2_i32.pow(lod as _),
-            ),
-            elem.width * 2_usize.pow(lod as _),
+            (elem.x, elem.y, elem.z),
+            elem.width,
             (cx, cy, cz),
             &mut indices,
             &mut n,
         );
         let front = generate_front_side(
-            elem.value,
+            &*elem.value,
             chunk,
-            (
-                elem.x * 2_i32.pow(lod as _),
-                elem.y * 2_i32.pow(lod as _),
-                elem.z * 2_i32.pow(lod as _),
-            ),
-            elem.width * 2_usize.pow(lod as _),
+            (elem.x, elem.y, elem.z),
+            elem.width,
             (cx, cy, cz),
             &mut indices,
             &mut n,
         );
         let back = generate_back_side(
-            elem.value,
+            &*elem.value,
             chunk,
-            (
-                elem.x * 2_i32.pow(lod as _),
-                elem.y * 2_i32.pow(lod as _),
-                elem.z * 2_i32.pow(lod as _),
-            ),
-            elem.width * 2_usize.pow(lod as _),
+            (elem.x, elem.y, elem.z),
+            elem.width,
             (cx, cy, cz),
             &mut indices,
             &mut n,

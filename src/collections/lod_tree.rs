@@ -1,9 +1,17 @@
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-use std::{borrow::Cow, collections::HashMap, mem};
+use std::{
+    borrow::Cow,
+    collections::{HashMap, HashSet},
+    mem,
+};
+
+use bevy::prelude::Color;
 
 use int_traits::IntTraits;
+
+use crate::world::Shade;
 
 fn depth_index(x: i32, y: i32, z: i32, depth: usize) -> usize {
     let width_2 = 1 << (depth - 1);
@@ -53,6 +61,18 @@ fn array_index(idx: usize, depth: usize) -> (i32, i32, i32) {
     (x - width_2, y - width_2, z - width_2)
 }
 
+pub trait Voxel: PartialEq + Clone {
+    fn average(data: &[Self]) -> Option<Self>;
+
+    fn shade(&self) -> Shade {
+        Shade::default()
+    }
+
+    fn color(&self) -> Color {
+        Color::rgba(1.0, 1.0, 1.0, 1.0)
+    }
+}
+
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Node<T> {
@@ -63,22 +83,32 @@ pub enum Node<T> {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Default, Debug, Clone, PartialEq, Eq, Hash)]
 pub struct LodTree<T> {
+    lod: usize,
     depth: usize,
     len: usize,
     array: Vec<Node<T>>,
 }
 
-impl<T: Clone + PartialEq> LodTree<T> {
+impl<T: Voxel> LodTree<T> {
     pub fn new(width: usize) -> Self {
         let mut array = Vec::with_capacity(width.pow(3));
         for _ in 0..width.pow(3) {
             array.push(Node::Value(None, 1));
         }
         Self {
+            lod: 0,
             depth: width.log2(),
             len: 0,
             array,
         }
+    }
+
+    pub fn set_lod(&mut self, lod: usize) {
+        self.lod = lod;
+    }
+
+    pub fn lod(&self) -> usize {
+        self.lod
     }
 
     pub fn capacity(&self) -> usize {
@@ -248,29 +278,6 @@ impl<T: Clone + PartialEq> LodTree<T> {
         }
     }
 
-    pub fn get(&self, (x, y, z): (i32, i32, i32)) -> Option<&T> {
-        if x >= self.width() as i32 / 2
-            || x < self.width() as i32 / -2
-            || y >= self.width() as i32 / 2
-            || y < self.width() as i32 / -2
-            || z >= self.width() as i32 / 2
-            || z < self.width() as i32 / -2
-        {
-            return None;
-        }
-        let idx = depth_index(x, y, z, self.depth);
-        let mut result_ref = &self.array[idx];
-
-        loop {
-            match result_ref {
-                Node::Ref(idx) => {
-                    result_ref = &self.array[*idx];
-                }
-                Node::Value(value, _) => return value.as_ref(),
-            }
-        }
-    }
-
     pub fn get_mut(&mut self, (x, y, z): (i32, i32, i32)) -> Option<&mut T> {
         if x >= self.width() as i32 / 2
             || x < self.width() as i32 / -2
@@ -294,42 +301,123 @@ impl<T: Clone + PartialEq> LodTree<T> {
         }
     }
 
+    pub fn get(&self, (x, y, z): (i32, i32, i32)) -> Option<Cow<'_, T>> {
+        if self.lod == 0 {
+            self.get_impl((x, y, z)).map(Cow::Borrowed)
+        } else {
+            let width = 1 << self.lod;
+            let mask = width - 1;
+            let x = x & !mask;
+            let y = y & !mask;
+            let z = z & !mask;
+            let start = depth_index(x, y, z, self.depth);
+            let end = start + width.pow(3) as usize;
+            // TODO: optimize this
+            let array = self.array[start..end]
+                .iter()
+                .flat_map(|mut value| loop {
+                    match value {
+                        Node::Ref(idx) => {
+                            value = &self.array[*idx];
+                        }
+                        Node::Value(value, _) => return value.clone(),
+                    }
+                })
+                .collect::<Vec<_>>();
+            T::average(&array).map(Cow::Owned)
+        }
+    }
+
+    fn get_impl(&self, (x, y, z): (i32, i32, i32)) -> Option<&T> {
+        if x >= self.width() as i32 / 2
+            || x < self.width() as i32 / -2
+            || y >= self.width() as i32 / 2
+            || y < self.width() as i32 / -2
+            || z >= self.width() as i32 / 2
+            || z < self.width() as i32 / -2
+        {
+            return None;
+        }
+        let idx = depth_index(x, y, z, self.depth);
+        let mut result_ref = &self.array[idx];
+
+        loop {
+            match result_ref {
+                Node::Ref(idx) => {
+                    result_ref = &self.array[*idx];
+                }
+                Node::Value(value, _) => return value.as_ref(),
+            }
+        }
+    }
+
     pub fn contains_key(&self, coords: (i32, i32, i32)) -> bool {
-        self.get(coords).is_some()
+        self.get_impl(coords).is_some()
     }
 
     pub fn elements(&self) -> impl Iterator<Item = Element<'_, T>> {
         let depth = self.depth;
-        let array = &self.array[..];
-        array
-            .iter()
+        let mut set = HashSet::new();
+        let width = 1_i32 << self.lod;
+        let mask = width - 1;
+        let width = 1_usize << self.lod;
+        let volume = width.pow(3);
+        self.array
+            .chunks(volume)
+            .map(|slice| slice.iter().enumerate())
             .enumerate()
-            .flat_map(move |(mut i, mut value)| {
-                let (idx, value, width) = loop {
-                    match value {
-                        Node::Ref(idx) => {
-                            value = &array[*idx];
-                            i = *idx;
-                        }
-                        Node::Value(value, width) => break (i, value, *width),
-                    }
+            .flat_map(move |(big_i, node)| {
+                let mut result = Element {
+                    x: 0,
+                    y: 0,
+                    z: 0,
+                    width: 0,
+                    value: unsafe { mem::MaybeUninit::uninit().assume_init() },
                 };
-                value.as_ref().map(|value| {
-                    let (x, y, z) = array_index(idx, depth);
-                    Element {
-                        x,
-                        y,
-                        z,
-                        width,
-                        value,
-                    }
-                })
+                let array = node
+                    .flat_map(|(small_i, mut value)| {
+                        let mut i = big_i * volume + small_i;
+                        let (idx, value, width) = loop {
+                            match value {
+                                Node::Ref(idx) => {
+                                    value = &self.array[*idx];
+                                    i = *idx;
+                                }
+                                Node::Value(value, width) => break (i, value, *width),
+                            }
+                        };
+                        if set.contains(&idx) {
+                            return None;
+                        }
+                        set.insert(idx);
+                        let (vx, vy, vz) = array_index(idx, depth);
+                        result.x = vx;
+                        result.y = vy;
+                        result.z = vz;
+                        result.width = width << self.lod;
+                        value.clone()
+                    })
+                    .collect::<Vec<_>>();
+                result.x &= !mask;
+                result.y &= !mask;
+                result.z &= !mask;
+                let avg = T::average(&array);
+                if let Some(value) = avg {
+                    let mut value = Cow::Owned(value);
+                    mem::swap(&mut result.value, &mut value);
+                    mem::forget(value);
+                    Some(result)
+                } else {
+                    mem::forget(result.value);
+                    None
+                }
             })
     }
 
     pub fn elements_mut(&mut self) -> impl Iterator<Item = ElementMut<'_, T>> {
         let depth = self.depth;
         let array = &mut self.array as *mut Vec<_>;
+        let mut set = HashSet::new();
         self.array
             .iter_mut()
             .enumerate()
@@ -344,6 +432,10 @@ impl<T: Clone + PartialEq> LodTree<T> {
                         Node::Value(value, width) => break (i, value, *width),
                     }
                 };
+                if set.contains(&idx) {
+                    return None;
+                }
+                set.insert(idx);
                 value.as_mut().map(|value| {
                     let (x, y, z) = array_index(idx, depth);
                     ElementMut {
@@ -382,13 +474,13 @@ impl<T: PartialEq> LodTree<T> {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Element<'a, T> {
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Element<'a, T: Clone> {
     pub x: i32,
     pub y: i32,
     pub z: i32,
     pub width: usize,
-    pub value: &'a T,
+    pub value: Cow<'a, T>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
