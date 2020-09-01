@@ -3,8 +3,8 @@ use bevy::prelude::*;
 use noise::{NoiseFn, OpenSimplex, Perlin, Seedable, SuperSimplex};
 
 use crate::{
-    render::entity::{Block, ChunkMeshUpdate},
-    world::{Chunk, Shade},
+    render::entity::Block,
+    world::{Chunk, Shade, Map, MapUpdates, ChunkUpdate},
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -76,20 +76,37 @@ impl TerrainGenParameters {
 
 pub fn terrain_generation(
     params: Res<TerrainGenParameters>,
-    mut query: Query<(&mut Chunk<Block>, &mut ChunkMeshUpdate)>,
+    mut query: Query<(&mut Map<Block>, &mut MapUpdates)>,
 ) {
-    for (mut chunk, mut update) in &mut query.iter() {
-        let lod = chunk.lod();
-        let flod = 2.0_f32.powf(4.0 - lod as f32);
-        if rand::random::<f32>() < 1.0 - 0.01 * flod {
-            continue;
+    for (mut map, mut update) in &mut query.iter() {
+        let mut remove = Vec::new();
+        let mut insert = Vec::new();
+        for (&(x, y, z, w), update) in &update.updates {
+            match update {
+                ChunkUpdate::GenerateChunk => {}
+                _ => continue,
+            }
+            remove.push((x, y, z, w));
+            let chunk = params.generate((x, y, z));
+            map.insert(chunk);
+            let range = 1;
+            for lx in -range..=range {
+                for ly in -range..=range {
+                    for lz in -range..=range {
+                        let x = x + lx;
+                        let y = y + ly;
+                        let z = z + lz;
+                        insert.push(((x, y, z, w), ChunkUpdate::UpdateLightMap));
+                    }
+                }
+            }
         }
-        if !update.generate_chunk {
-            continue;
+        for coords in remove {
+            update.updates.remove(&coords);
         }
-        *chunk = params.generate(chunk.position());
-        update.update_light = true;
-        update.generate_chunk = false;
+        for (coords, u) in insert {
+            update.updates.insert(coords, u);
+        }
     }
 }
 

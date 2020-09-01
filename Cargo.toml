@@ -14,6 +14,7 @@ rand = "0.7"
 line_drawing = "0.8"
 noise = "0.6"
 int_traits = "0.1"
+rstar = "0.8"
 
 [dependencies.bevy]
 path = "../bevy"
