@@ -133,46 +133,60 @@ pub fn shaded_light_update<T: VoxelTracer>(
             }
         }
 
-        let width = chunk.width() as i32;
-        let width_2 = width / 2;
-
-        for x in -width_2..width_2 {
-            for y in -width_2..width_2 {
-                for z in -width_2..width_2 {
-                    let idx = ((x + lm_width_2) * lm_width * lm_width) as usize
-                        + ((y + lm_width_2) * lm_width) as usize
-                        + (z + lm_width_2) as usize;
-                    if let Some(light) = light_map[idx] {
-                        if let Some(mut block) = chunk.get((x, y - 1, z)) {
-                            block.to_mut().shade.top = light;
-                            let block = *block;
-                            chunk.insert((x, y - 1, z), block);
+        for x in -lm_width_2..lm_width_2 {
+            for y in -lm_width_2..lm_width_2 {
+                for z in -lm_width_2..lm_width_2 {
+                    let mut light = 0.0;
+                    let mut count = 0;
+                    for lx in -1..=1 {
+                        for ly in -1..=1 {
+                            for lz in -1..=1 {
+                                let x = x + lx;
+                                let y = y + ly;
+                                let z = z + lz;
+                                if x < -lm_width_2 || x >= lm_width_2 || y < -lm_width_2 || y >= lm_width_2 || z < -lm_width_2 || z >= lm_width_2 {
+                                    continue;
+                                }
+                                let idx = ((x + lm_width_2) * lm_width * lm_width) as usize
+                                    + ((y + lm_width_2) * lm_width) as usize
+                                    + (z + lm_width_2) as usize;
+                                if let Some(l) = light_map[idx] {
+                                    light += l;
+                                    count += 1;
+                                }
+                            }
                         }
-                        if let Some(mut block) = chunk.get((x, y + 1, z)) {
-                            block.to_mut().shade.bottom = light;
-                            let block = *block;
-                            chunk.insert((x, y + 1, z), block);
-                        }
-                        if let Some(mut block) = chunk.get((x, y, z - 1)) {
-                            block.to_mut().shade.front = light;
-                            let block = *block;
-                            chunk.insert((x, y, z - 1), block);
-                        }
-                        if let Some(mut block) = chunk.get((x, y, z + 1)) {
-                            block.to_mut().shade.back = light;
-                            let block = *block;
-                            chunk.insert((x, y, z + 1), block);
-                        }
-                        if let Some(mut block) = chunk.get((x - 1, y, z)) {
-                            block.to_mut().shade.left = light;
-                            let block = *block;
-                            chunk.insert((x - 1, y, z), block);
-                        }
-                        if let Some(mut block) = chunk.get((x + 1, y, z)) {
-                            block.to_mut().shade.right = light;
-                            let block = *block;
-                            chunk.insert((x + 1, y, z), block);
-                        }
+                    }
+                    let light = light / count as f32;
+                    if let Some(mut block) = chunk.get((x, y - 1, z)) {
+                        block.to_mut().shade.top = light;
+                        let block = *block;
+                        chunk.insert((x, y - 1, z), block);
+                    }
+                    if let Some(mut block) = chunk.get((x, y + 1, z)) {
+                        block.to_mut().shade.bottom = light;
+                        let block = *block;
+                        chunk.insert((x, y + 1, z), block);
+                    }
+                    if let Some(mut block) = chunk.get((x, y, z - 1)) {
+                        block.to_mut().shade.front = light;
+                        let block = *block;
+                        chunk.insert((x, y, z - 1), block);
+                    }
+                    if let Some(mut block) = chunk.get((x, y, z + 1)) {
+                        block.to_mut().shade.back = light;
+                        let block = *block;
+                        chunk.insert((x, y, z + 1), block);
+                    }
+                    if let Some(mut block) = chunk.get((x - 1, y, z)) {
+                        block.to_mut().shade.left = light;
+                        let block = *block;
+                        chunk.insert((x - 1, y, z), block);
+                    }
+                    if let Some(mut block) = chunk.get((x + 1, y, z)) {
+                        block.to_mut().shade.right = light;
+                        let block = *block;
+                        chunk.insert((x + 1, y, z), block);
                     }
                 }
             }
