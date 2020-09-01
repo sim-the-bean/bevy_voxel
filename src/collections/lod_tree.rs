@@ -73,6 +73,12 @@ pub trait Voxel: PartialEq + Clone {
     }
 }
 
+impl Voxel for f32 {
+    fn average(data: &[Self]) -> Option<Self> {
+        Some(data.iter().copied().sum::<f32>() / data.len() as f32)
+    }
+}
+
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Node<T> {
@@ -289,14 +295,25 @@ impl<T: Voxel> LodTree<T> {
             return None;
         }
         let idx = depth_index(x, y, z, self.depth);
-        let mut result_ref = &mut self.array[idx] as *mut _;
+        let result_ref = &mut self.array[idx] as *mut _;
+        let mut result = &mut self.array[idx] as *mut _;
 
-        loop {
-            match unsafe { &mut *result_ref } {
+        let value = loop {
+            match unsafe { &mut *result } {
                 Node::Ref(idx) => {
-                    result_ref = &mut self.array[*idx] as *mut _;
+                    result = &mut self.array[*idx] as &mut _;
                 }
-                Node::Value(value, _) => return value.as_mut(),
+                Node::Value(value, width) => {
+                    *width = 1;
+                    break value.clone();
+                }
+            }
+        };
+        unsafe {
+            *result_ref = Node::Value(value, 1);
+            match &mut *result_ref {
+                Node::Value(value, _) => value.as_mut(),
+                _ => unreachable!(),
             }
         }
     }
@@ -417,32 +434,38 @@ impl<T: Voxel> LodTree<T> {
     pub fn elements_mut(&mut self) -> impl Iterator<Item = ElementMut<'_, T>> {
         let depth = self.depth;
         let array = &mut self.array as *mut Vec<_>;
-        let mut set = HashSet::new();
         self.array
             .iter_mut()
             .enumerate()
-            .flat_map(move |(mut i, mut value)| {
-                let (idx, value, width) = loop {
+            .flat_map(move |(i, mut value)| {
+                let idx = i;
+                let orig = value as *mut Node<T>;
+                let value = loop {
                     match value {
                         Node::Ref(idx) => {
-                            let array = unsafe { &mut *array };
+                            let array: &mut Vec<Node<T>> = unsafe { &mut *array };
                             value = &mut array[*idx];
-                            i = *idx;
                         }
-                        Node::Value(value, width) => break (i, value, *width),
+                        Node::Value(value, width) => {
+                            *width = 1;
+                            break value.clone();
+                        }
                     }
                 };
-                if set.contains(&idx) {
-                    return None;
-                }
-                set.insert(idx);
+                let value = unsafe {
+                    *orig = Node::Value(value, 1);
+                    match &mut *orig {
+                        Node::Value(value, _) => value,
+                        _ => unreachable!(),
+                    }
+                };
                 value.as_mut().map(|value| {
                     let (x, y, z) = array_index(idx, depth);
                     ElementMut {
                         x,
                         y,
                         z,
-                        width,
+                        width: 1,
                         value,
                     }
                 })
