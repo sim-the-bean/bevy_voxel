@@ -78,6 +78,8 @@ pub fn terrain_generation(
     params: Res<TerrainGenParameters>,
     mut query: Query<(&mut Map<Block>, &mut MapUpdates)>,
 ) {
+    let max_count = 1;
+    let mut count = 0;
     for (mut map, mut update) in &mut query.iter() {
         let mut remove = Vec::new();
         let mut insert = Vec::new();
@@ -86,6 +88,10 @@ pub fn terrain_generation(
                 ChunkUpdate::GenerateChunk => {}
                 _ => continue,
             }
+            if count == max_count {
+                break;
+            }
+            count += 1;
             remove.push((x, y, z, w));
             let chunk = params.generate((x, y, z));
             map.insert(chunk);
@@ -105,7 +111,9 @@ pub fn terrain_generation(
             update.updates.remove(&coords);
         }
         for (coords, u) in insert {
-            update.updates.insert(coords, u);
+            if !update.updates.contains_key(&coords) {
+                update.updates.insert(coords, u);
+            }
         }
     }
 }

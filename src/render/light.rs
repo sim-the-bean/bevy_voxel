@@ -46,7 +46,7 @@ pub fn simple_light_update(
         let mut insert = Vec::new();
         for (&(x, y, z, w), update) in &update.updates {
             match update {
-                ChunkUpdate::UpdateLight => {}
+                ChunkUpdate::UpdateLightMap => {}
                 _ => continue,
             }
             remove.push((x, y, z, w));
@@ -54,31 +54,35 @@ pub fn simple_light_update(
             let cx = x * w as i32;
             let cy = y * w as i32;
             let cz = z * w as i32;
-            let chunk = map.get_mut((cx, cy, cz)).unwrap();
+            let chunk = map.get_mut((cx, cy, cz));
+            if chunk.is_none() {
+                continue;
+            }
+            let chunk = chunk.unwrap();
 
             let light = -directional.direction;
 
             for elem in chunk.iter_mut() {
                 elem.value.shade.top =
-                    elem.value.shade.top * light.dot(Vec3::new(0.0, 1.0, 0.0)) * directional.intensity
+                    light.dot(Vec3::new(0.0, 1.0, 0.0)) * directional.intensity
                     + ambient.intensity;
-                elem.value.shade.bottom = elem.value.shade.bottom
-                    * light.dot(Vec3::new(0.0, -1.0, 0.0))
+                elem.value.shade.bottom = 
+                    light.dot(Vec3::new(0.0, -1.0, 0.0))
                     * directional.intensity
                     + ambient.intensity;
-                elem.value.shade.front = elem.value.shade.front
-                    * light.dot(Vec3::new(0.0, 0.0, 1.0))
+                elem.value.shade.front =
+                    light.dot(Vec3::new(0.0, 0.0, 1.0))
                     * directional.intensity
                     + ambient.intensity;
-                elem.value.shade.back = elem.value.shade.back
-                    * light.dot(Vec3::new(0.0, 0.0, -1.0))
+                elem.value.shade.back =
+                    light.dot(Vec3::new(0.0, 0.0, -1.0))
                     * directional.intensity
                     + ambient.intensity;
                 elem.value.shade.left =
-                    elem.value.shade.left * light.dot(Vec3::new(1.0, 0.0, 0.0)) * directional.intensity
+                    light.dot(Vec3::new(1.0, 0.0, 0.0)) * directional.intensity
                     + ambient.intensity;
-                elem.value.shade.right = elem.value.shade.right
-                    * light.dot(Vec3::new(-1.0, 0.0, 0.0))
+                elem.value.shade.right =
+                    light.dot(Vec3::new(-1.0, 0.0, 0.0))
                     * directional.intensity
                     + ambient.intensity;
             }

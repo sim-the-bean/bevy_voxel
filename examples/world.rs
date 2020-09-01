@@ -72,7 +72,7 @@ pub fn main() {
         .add_system_to_stage("stage_lod_update", lod_update.system())
         .add_system_to_stage(
             stage::UPDATE,
-            light_map_update::<line_drawing::WalkVoxels<f32, i32>>.system(),
+            light_map_update::<line_drawing::Bresenham3d<i32>>.system(),
         )
         .add_system_to_stage(
             stage::UPDATE,
