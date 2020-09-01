@@ -3,7 +3,7 @@ use bevy::prelude::*;
 use line_drawing::{Bresenham3d, VoxelOrigin, WalkVoxels};
 
 use crate::{
-    render::entity::{Block, ChunkMeshUpdate, CurrentLod},
+    render::entity::{Block, ChunkMeshUpdate},
     world::Chunk,
 };
 
@@ -39,10 +39,10 @@ pub struct AmbientLight {
 pub fn simple_light_update(
     directional: Res<DirectionalLight>,
     ambient: Res<AmbientLight>,
-    mut query: Query<(&mut Chunk<Block>, &mut ChunkMeshUpdate, &CurrentLod)>,
+    mut query: Query<(&mut Chunk<Block>, &mut ChunkMeshUpdate)>,
 ) {
-    for (mut chunk, mut update, current_lod) in &mut query.iter() {
-        let lod = current_lod.get();
+    for (mut chunk, mut update) in &mut query.iter() {
+        let lod = chunk.lod();
         let flod = 2.0_f32.powf(lod as f32);
         if rand::random::<f32>() < 1.0 - 0.01 * flod {
             continue;
@@ -53,7 +53,7 @@ pub fn simple_light_update(
         update.update_light = false;
         update.update_mesh = true;
         let light = -directional.direction;
-        for elem in chunk.iter_mut(lod) {
+        for elem in chunk.iter_mut() {
             elem.value.shade.top =
                 light.dot(Vec3::new(0.0, 1.0, 0.0)) * directional.intensity + ambient.intensity;
             elem.value.shade.bottom =
@@ -73,10 +73,10 @@ pub fn simple_light_update(
 pub fn shaded_light_update<T: VoxelTracer>(
     directional: Res<DirectionalLight>,
     ambient: Res<AmbientLight>,
-    mut query: Query<(&mut Chunk<Block>, &mut ChunkMeshUpdate, &CurrentLod)>,
+    mut query: Query<(&mut Chunk<Block>, &mut ChunkMeshUpdate)>,
 ) {
-    for (mut chunk, mut update, current_lod) in &mut query.iter() {
-        let lod = current_lod.get();
+    for (mut chunk, mut update) in &mut query.iter() {
+        let lod = chunk.lod();
         let flod = 2.0_f32.powf(lod as f32);
         if rand::random::<f32>() < 1.0 - 0.01 * flod {
             continue;
@@ -87,9 +87,9 @@ pub fn shaded_light_update<T: VoxelTracer>(
         update.update_light = false;
         update.update_mesh = true;
 
-        let mut light_map = vec![None; (chunk.width(lod) + 2).pow(3)];
+        let mut light_map = vec![None; (chunk.width() + 2).pow(3)];
 
-        let lm_width = chunk.width(lod) as i32 + 2;
+        let lm_width = chunk.width() as i32 + 2;
         let lm_width_2 = lm_width / 2;
 
         for y in -lm_width_2..lm_width_2 {
@@ -133,7 +133,7 @@ pub fn shaded_light_update<T: VoxelTracer>(
             }
         }
 
-        let width = chunk.width(lod) as i32;
+        let width = chunk.width() as i32;
         let width_2 = width / 2;
 
         for x in -width_2..width_2 {
@@ -143,28 +143,34 @@ pub fn shaded_light_update<T: VoxelTracer>(
                         + ((y + lm_width_2) * lm_width) as usize
                         + (z + lm_width_2) as usize;
                     if let Some(light) = light_map[idx] {
-                        if let Some(mut block) = chunk.get_at(lod, (x, y - 1, z)).copied() {
-                            block.shade.top = light;
+                        if let Some(mut block) = chunk.get((x, y - 1, z)) {
+                            block.to_mut().shade.top = light;
+                            let block = *block;
                             chunk.insert((x, y - 1, z), block);
                         }
-                        if let Some(mut block) = chunk.get_at(lod, (x, y + 1, z)).copied() {
-                            block.shade.bottom = light;
+                        if let Some(mut block) = chunk.get((x, y + 1, z)) {
+                            block.to_mut().shade.bottom = light;
+                            let block = *block;
                             chunk.insert((x, y + 1, z), block);
                         }
-                        if let Some(mut block) = chunk.get_at(lod, (x, y, z - 1)).copied() {
-                            block.shade.front = light;
+                        if let Some(mut block) = chunk.get((x, y, z - 1)) {
+                            block.to_mut().shade.front = light;
+                            let block = *block;
                             chunk.insert((x, y, z - 1), block);
                         }
-                        if let Some(mut block) = chunk.get_at(lod, (x, y, z + 1)).copied() {
-                            block.shade.back = light;
+                        if let Some(mut block) = chunk.get((x, y, z + 1)) {
+                            block.to_mut().shade.back = light;
+                            let block = *block;
                             chunk.insert((x, y, z + 1), block);
                         }
-                        if let Some(mut block) = chunk.get_at(lod, (x - 1, y, z)).copied() {
-                            block.shade.left = light;
+                        if let Some(mut block) = chunk.get((x - 1, y, z)) {
+                            block.to_mut().shade.left = light;
+                            let block = *block;
                             chunk.insert((x - 1, y, z), block);
                         }
-                        if let Some(mut block) = chunk.get_at(lod, (x + 1, y, z)).copied() {
-                            block.shade.right = light;
+                        if let Some(mut block) = chunk.get((x + 1, y, z)) {
+                            block.to_mut().shade.right = light;
+                            let block = *block;
                             chunk.insert((x + 1, y, z), block);
                         }
                     }
@@ -174,7 +180,7 @@ pub fn shaded_light_update<T: VoxelTracer>(
 
         let light = -directional.direction;
 
-        for elem in chunk.iter_mut(lod) {
+        for elem in chunk.iter_mut() {
             elem.value.shade.top =
                 elem.value.shade.top * light.dot(Vec3::new(0.0, 1.0, 0.0)) * directional.intensity
                     + ambient.intensity;

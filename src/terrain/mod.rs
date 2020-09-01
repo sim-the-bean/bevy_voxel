@@ -3,7 +3,7 @@ use bevy::prelude::*;
 use noise::{NoiseFn, OpenSimplex, Perlin, Seedable, SuperSimplex};
 
 use crate::{
-    render::entity::{Block, ChunkMeshUpdate, CurrentLod},
+    render::entity::{Block, ChunkMeshUpdate},
     world::{Chunk, Shade},
 };
 
@@ -76,10 +76,10 @@ impl TerrainGenParameters {
 
 pub fn terrain_generation(
     params: Res<TerrainGenParameters>,
-    mut query: Query<(&mut Chunk<Block>, &mut ChunkMeshUpdate, &CurrentLod)>,
+    mut query: Query<(&mut Chunk<Block>, &mut ChunkMeshUpdate)>,
 ) {
-    for (mut chunk, mut update, current_lod) in &mut query.iter() {
-        let lod = current_lod.get();
+    for (mut chunk, mut update) in &mut query.iter() {
+        let lod = chunk.lod();
         let flod = 2.0_f32.powf(4.0 - lod as f32);
         if rand::random::<f32>() < 1.0 - 0.01 * flod {
             continue;
@@ -146,6 +146,8 @@ fn terrain_gen2_impl<T: NoiseFn<[f64; 2]> + Seedable + Default>(
         }
     }
 
+    chunk.merge();
+
     chunk
 }
 
@@ -207,6 +209,8 @@ fn terrain_gen3_impl<T: NoiseFn<[f64; 3]> + Seedable + Default>(
             }
         }
     }
+
+    chunk.merge();
 
     chunk
 }

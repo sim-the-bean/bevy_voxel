@@ -1,12 +1,11 @@
-use bevy::prelude::*;
+use std::borrow::Cow;
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-pub use crate::collections::volumetric_tree::Node as ChunkNode;
 use crate::collections::{
-    volumetric_tree::{Element, ElementMut},
-    VolumetricTree,
+    lod_tree::{Element, ElementMut, Voxel},
+    LodTree,
 };
 
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -46,27 +45,13 @@ impl Default for Shade {
     }
 }
 
-pub trait Voxel: PartialEq + Clone {
-    fn average(data: &[Self]) -> Option<Self>;
-
-    fn shade(&self) -> Shade {
-        Shade::default()
-    }
-
-    fn color(&self) -> Color {
-        Color::rgba(1.0, 1.0, 1.0, 1.0)
-    }
-}
-
 pub type ChunkKey = (i32, i32, i32);
-
-pub type Lod = usize;
 
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, Clone, PartialEq)]
 pub struct Chunk<T> {
     position: ChunkKey,
-    data: Vec<VolumetricTree<T>>,
+    data: LodTree<T>,
 }
 
 impl<T: Voxel> Default for Chunk<T> {
@@ -77,76 +62,52 @@ impl<T: Voxel> Default for Chunk<T> {
 
 impl<T: Voxel> Chunk<T> {
     pub fn new(size: u32, position: ChunkKey) -> Self {
-        let mut data = Vec::new();
-        for i in 0..size {
-            let chunk_size = 2_usize.pow(size - i);
-            data.push(VolumetricTree::new(chunk_size));
-        }
+        let chunk_size = 1 << size;
+        let data = LodTree::new(chunk_size);
         Self { position, data }
     }
 
-    fn update_lod(&mut self, mut coords: (i32, i32, i32)) {
-        for lod in 0..self.data.len() - 1 {
-            let (mut x, mut y, mut z) = coords;
-            x &= !1;
-            y &= !1;
-            z &= !1;
-            let mut array = Vec::new();
-            array.extend(self.data[lod].get((x, y, z)).cloned());
-            array.extend(self.data[lod].get((x, y, z + 1)).cloned());
-            array.extend(self.data[lod].get((x, y + 1, z)).cloned());
-            array.extend(self.data[lod].get((x, y + 1, z + 1)).cloned());
-            array.extend(self.data[lod].get((x + 1, y, z)).cloned());
-            array.extend(self.data[lod].get((x + 1, y, z + 1)).cloned());
-            array.extend(self.data[lod].get((x + 1, y + 1, z)).cloned());
-            array.extend(self.data[lod].get((x + 1, y + 1, z + 1)).cloned());
-            let block = T::average(&array);
-            let x = coords.0 / 2;
-            let y = coords.1 / 2;
-            let z = coords.2 / 2;
-            coords = (x, y, z);
-            if let Some(block) = block {
-                self.data[lod + 1].insert(coords, block);
-            } else {
-                self.data[lod + 1].remove(coords);
-            }
-        }
+    pub fn set_lod(&mut self, lod: usize) {
+        self.data.set_lod(lod);
+    }
+
+    pub fn lod(&self) -> usize {
+        self.data.lod()
+    }
+
+    pub fn merge(&mut self) {
+        self.data.merge();
     }
 
     pub fn position(&self) -> (i32, i32, i32) {
         self.position
     }
 
-    pub fn width(&self, lod: Lod) -> usize {
-        self.data[lod].width()
+    pub fn width(&self) -> usize {
+        self.data.width()
     }
 
-    pub fn iter(&self, lod: Lod) -> impl Iterator<Item = Element<'_, T>> {
-        self.data[lod].elements()
+    pub fn iter(&self) -> impl Iterator<Item = Element<'_, T>> {
+        self.data.elements()
     }
 
-    pub fn iter_mut(&mut self, lod: Lod) -> impl Iterator<Item = ElementMut<'_, T>> {
-        self.data[lod].elements_mut()
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = ElementMut<'_, T>> {
+        self.data.elements_mut()
     }
 
     pub fn insert(&mut self, coords: (i32, i32, i32), voxel: T) {
-        self.data[0].insert(coords, voxel);
-        self.update_lod(coords);
+        self.data.insert(coords, voxel);
     }
 
-    pub fn get(&self, coords: (i32, i32, i32)) -> Option<&T> {
-        self.data[0].get(coords)
+    pub fn get(&self, coords: (i32, i32, i32)) -> Option<Cow<'_, T>> {
+        self.data.get(coords)
     }
 
     pub fn get_mut(&mut self, coords: (i32, i32, i32)) -> Option<&mut T> {
-        self.data[0].get_mut(coords)
+        self.data.get_mut(coords)
     }
 
-    pub fn get_at(&self, lod: Lod, coords: (i32, i32, i32)) -> Option<&T> {
-        self.data[lod].get(coords)
-    }
-
-    pub fn get_mut_at(&mut self, lod: Lod, coords: (i32, i32, i32)) -> Option<&mut T> {
-        self.data[lod].get_mut(coords)
+    pub fn contains_key(&self, coords: (i32, i32, i32)) -> bool {
+        self.data.contains_key(coords)
     }
 }

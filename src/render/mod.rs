@@ -7,6 +7,7 @@ use self::material::VoxelMaterial;
 
 pub mod entity;
 pub mod light;
+pub mod lod;
 pub mod material;
 pub mod render_graph;
 
