@@ -51,9 +51,10 @@ pub fn simple_light_update(
             }
             remove.push((x, y, z, w));
 
-            let cx = x * w as i32;
-            let cy = y * w as i32;
-            let cz = z * w as i32;
+            let w_2 = w as i32 / 2;
+            let cx = x * w as i32 - w_2;
+            let cy = y * w as i32 - w_2;
+            let cz = z * w as i32 - w_2;
             let chunk = map.get_mut((cx, cy, cz));
             if chunk.is_none() {
                 continue;
@@ -63,19 +64,22 @@ pub fn simple_light_update(
             let light = -directional.direction;
 
             for elem in chunk.iter_mut() {
-                elem.value.shade.top =
-                    light.dot(Vec3::new(0.0, 1.0, 0.0)) * directional.intensity + ambient.intensity;
-                elem.value.shade.bottom = light.dot(Vec3::new(0.0, -1.0, 0.0))
+                elem.value.shade.top = light.dot(Vec3::new(0.0, 1.0, 0.0)).max(0.0).min(1.0)
                     * directional.intensity
                     + ambient.intensity;
-                elem.value.shade.front =
-                    light.dot(Vec3::new(0.0, 0.0, 1.0)) * directional.intensity + ambient.intensity;
-                elem.value.shade.back = light.dot(Vec3::new(0.0, 0.0, -1.0))
+                elem.value.shade.bottom = light.dot(Vec3::new(0.0, -1.0, 0.0)).max(0.0).min(1.0)
                     * directional.intensity
                     + ambient.intensity;
-                elem.value.shade.left =
-                    light.dot(Vec3::new(1.0, 0.0, 0.0)) * directional.intensity + ambient.intensity;
-                elem.value.shade.right = light.dot(Vec3::new(-1.0, 0.0, 0.0))
+                elem.value.shade.front = light.dot(Vec3::new(0.0, 0.0, 1.0)).max(0.0).min(1.0)
+                    * directional.intensity
+                    + ambient.intensity;
+                elem.value.shade.back = light.dot(Vec3::new(0.0, 0.0, -1.0)).max(0.0).min(1.0)
+                    * directional.intensity
+                    + ambient.intensity;
+                elem.value.shade.left = light.dot(Vec3::new(1.0, 0.0, 0.0)).max(0.0).min(1.0)
+                    * directional.intensity
+                    + ambient.intensity;
+                elem.value.shade.right = light.dot(Vec3::new(-1.0, 0.0, 0.0)).max(0.0).min(1.0)
                     * directional.intensity
                     + ambient.intensity;
             }
@@ -274,7 +278,7 @@ pub fn shaded_light_update(
                     * directional.intensity
                     + ambient.intensity;
             }
-            
+
             chunk.merge();
 
             remove.push((x, y, z, w));

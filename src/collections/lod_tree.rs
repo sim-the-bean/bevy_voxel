@@ -143,18 +143,25 @@ impl<T: Voxel> LodTree<T> {
         for d in 1..=self.depth {
             let skip = 8_usize.pow(d as u32 - 1);
 
-            let mut merges = Vec::new();
+            let mut merges = HashMap::<_, Vec<_>>::new();
             let mut pivot = None;
-            let iter = self.array.iter().enumerate().filter_map(|(i, elem)| {
-                if i % skip == 0 {
-                    Some((i, elem))
-                } else {
-                    None
-                }
-            });
+            let iter = self
+                .array
+                .iter()
+                .enumerate()
+                .filter_map(
+                    |(i, elem)| {
+                        if i % skip == 0 {
+                            Some((i, elem))
+                        } else {
+                            None
+                        }
+                    },
+                )
+                .enumerate();
 
-            for (i, node) in iter {
-                if i & 7 == 0 {
+            for (count, (i, node)) in iter {
+                if count & 7 == 0 {
                     let mut i = i;
                     let mut node = node;
                     pivot = loop {
@@ -163,38 +170,35 @@ impl<T: Voxel> LodTree<T> {
                                 node = &self.array[*idx];
                                 i = *idx;
                             }
-                            Node::Value(value, _) => break Some((value, i)),
+                            Node::Value(value, width) => break Some((value, width, i)),
                         }
                     };
                     continue;
                 }
-                if let Some((pivot, pivot_idx)) = pivot {
+                if let Some((pivot, pivot_width, pivot_idx)) = pivot {
                     let mut i = i;
                     let mut node = node;
-                    let elem = loop {
+                    let (elem, width) = loop {
                         match node {
                             Node::Ref(idx) => {
                                 node = &self.array[*idx];
                                 i = *idx;
                             }
-                            Node::Value(value, _) => break value,
+                            Node::Value(value, width) => break (value, width),
                         }
                     };
-                    if elem == pivot {
-                        merges.push((i, pivot_idx));
+                    if elem == pivot && width == pivot_width {
+                        merges.entry(pivot_idx).or_default().push(i);
                     }
                 }
             }
 
-            let mut pivot_map = HashMap::<_, usize>::new();
-            for (idx, pivot_idx) in merges {
-                *pivot_map.entry(pivot_idx).or_default() += 1;
-                self.array[idx] = Node::Ref(pivot_idx);
-            }
-
-            for (pivot_idx, count) in pivot_map {
-                debug_assert!(count < 8, "count is not < 8: {}", count);
-                if count == 7 {
+            for (pivot_idx, idxs) in merges {
+                debug_assert!(idxs.len() < 8, "idxs.len() is not < 8: {}", idxs.len());
+                if idxs.len() == 7 {
+                    for idx in idxs {
+                        self.array[idx] = Node::Ref(pivot_idx);
+                    }
                     match &mut self.array[pivot_idx] {
                         Node::Value(_, width) => *width *= 2,
                         _ => unreachable!(),
@@ -375,8 +379,6 @@ impl<T: Voxel> LodTree<T> {
     pub fn elements(&self) -> impl Iterator<Item = Element<'_, T>> {
         let depth = self.depth;
         let mut set = HashSet::new();
-        let width = 1_i32 << self.lod;
-        let mask = width - 1;
         let width = 1_usize << self.lod;
         let volume = width.pow(3);
         self.array
@@ -411,10 +413,11 @@ impl<T: Voxel> LodTree<T> {
                         result.x = vx;
                         result.y = vy;
                         result.z = vz;
-                        result.width = width << self.lod;
+                        result.width = width.max(1 << self.lod);
                         value.clone()
                     })
                     .collect::<Vec<_>>();
+                let mask = result.width as i32 - 1;
                 result.x &= !mask;
                 result.y &= !mask;
                 result.z &= !mask;

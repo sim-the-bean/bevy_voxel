@@ -12,7 +12,7 @@ use bevy_voxel::{
 };
 
 pub const CHUNK_SIZE: u32 = 5;
-pub const WORLD_WIDTH: i32 = 128;
+pub const WORLD_WIDTH: i32 = 64;
 pub const WORLD_HEIGHT: i32 = 64;
 
 pub fn main() {
@@ -125,13 +125,15 @@ fn chunk_update(
             let chunk = map.get((cx, cy, cz)).unwrap();
 
             let mesh = generate_chunk_mesh(&map, &chunk);
-            commands.spawn(ChunkRenderComponents {
-                mesh: meshes.add(mesh),
-                material: materials.add(VoxelMaterial {
-                    albedo: Color::WHITE,
-                }),
-                ..Default::default()
-            });
+            if let Some(mesh) = mesh {
+                commands.spawn(ChunkRenderComponents {
+                    mesh: meshes.add(mesh),
+                    material: materials.add(VoxelMaterial {
+                        albedo: Color::WHITE,
+                    }),
+                    ..Default::default()
+                });
+            }
         }
         for coords in remove {
             update.updates.remove(&coords);

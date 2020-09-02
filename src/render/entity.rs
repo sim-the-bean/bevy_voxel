@@ -493,7 +493,7 @@ fn generate_bottom_side<T: Voxel>(
     None
 }
 
-pub fn generate_chunk_mesh<T: Voxel>(map: &Map<T>, chunk: &Chunk<T>) -> Mesh {
+pub fn generate_chunk_mesh<T: Voxel>(map: &Map<T>, chunk: &Chunk<T>) -> Option<Mesh> {
     let mut positions = Vec::new();
     let mut shades = Vec::new();
     let mut colors = Vec::new();
@@ -605,7 +605,11 @@ pub fn generate_chunk_mesh<T: Voxel>(map: &Map<T>, chunk: &Chunk<T>) -> Mesh {
         }
     }
 
-    Mesh {
+    if positions.is_empty() {
+        return None;
+    }
+
+    Some(Mesh {
         primitive_topology: bevy::render::pipeline::PrimitiveTopology::TriangleList,
         attributes: vec![
             bevy::render::mesh::VertexAttribute {
@@ -622,5 +626,5 @@ pub fn generate_chunk_mesh<T: Voxel>(map: &Map<T>, chunk: &Chunk<T>) -> Mesh {
             },
         ],
         indices: Some(indices),
-    }
+    })
 }
