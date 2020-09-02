@@ -4,7 +4,7 @@ use noise::{NoiseFn, OpenSimplex, Perlin, Seedable, SuperSimplex};
 
 use crate::{
     render::entity::Block,
-    world::{Chunk, Shade, Map, MapUpdates, ChunkUpdate},
+    world::{Chunk, ChunkUpdate, Map, MapUpdates, Shade},
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

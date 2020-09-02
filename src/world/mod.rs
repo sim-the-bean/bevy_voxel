@@ -1,18 +1,19 @@
-use std::borrow::Cow;
-use std::collections::HashMap;
+use std::{borrow::Cow, collections::HashMap};
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-use rstar::{AABB, PointDistance, RTree, RTreeObject};
+use rstar::{PointDistance, RTree, RTreeObject, AABB};
 
 use bevy::ecs::Bundle;
 
-use crate::collections::{
-    lod_tree::{Element, ElementMut, Voxel},
-    LodTree,
+use crate::{
+    collections::{
+        lod_tree::{Element, ElementMut, Voxel},
+        LodTree,
+    },
+    render::entity::Block,
 };
-use crate::render::entity::Block;
 
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -67,7 +68,12 @@ impl<T: Voxel> Chunk<T> {
         let chunk_size = 1 << size;
         let data = LodTree::new(chunk_size);
         let light = LodTree::new(chunk_size);
-        Self { position, data, light, has_light: false }
+        Self {
+            position,
+            data,
+            light,
+            has_light: false,
+        }
     }
 
     pub fn has_light(&self) -> bool {
@@ -182,11 +188,9 @@ pub struct Map<T: Voxel> {
 
 impl<T: Voxel> Map<T> {
     pub fn new() -> Self {
-        Self {
-            map: RTree::new(),
-        }
+        Self { map: RTree::new() }
     }
-    
+
     pub fn with_chunks(initial: Vec<Chunk<T>>) -> Self {
         Self {
             map: RTree::bulk_load(initial),

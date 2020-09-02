@@ -26,7 +26,8 @@ pub fn lod_update(
             let (x, y, z) = chunk.position();
             let lod = ((camera_x - x * chunk.width() as i32).abs() / 128)
                 .max((camera_y - y * chunk.width() as i32).abs() / 128)
-                .max((camera_z - z * chunk.width() as i32).abs() / 128) as usize;
+                .max((camera_z - z * chunk.width() as i32).abs() / 128)
+                as usize;
             chunk.set_lod(lod);
         }
     }

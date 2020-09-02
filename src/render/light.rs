@@ -4,7 +4,7 @@ use line_drawing::{Bresenham3d, VoxelOrigin, WalkVoxels};
 
 use crate::{
     render::entity::Block,
-    world::{Map, MapUpdates, ChunkUpdate},
+    world::{ChunkUpdate, Map, MapUpdates},
 };
 
 pub trait VoxelTracer: Iterator<Item = (i32, i32, i32)> {
@@ -64,29 +64,24 @@ pub fn simple_light_update(
 
             for elem in chunk.iter_mut() {
                 elem.value.shade.top =
-                    light.dot(Vec3::new(0.0, 1.0, 0.0)) * directional.intensity
-                    + ambient.intensity;
-                elem.value.shade.bottom = 
-                    light.dot(Vec3::new(0.0, -1.0, 0.0))
+                    light.dot(Vec3::new(0.0, 1.0, 0.0)) * directional.intensity + ambient.intensity;
+                elem.value.shade.bottom = light.dot(Vec3::new(0.0, -1.0, 0.0))
                     * directional.intensity
                     + ambient.intensity;
                 elem.value.shade.front =
-                    light.dot(Vec3::new(0.0, 0.0, 1.0))
-                    * directional.intensity
-                    + ambient.intensity;
-                elem.value.shade.back =
-                    light.dot(Vec3::new(0.0, 0.0, -1.0))
+                    light.dot(Vec3::new(0.0, 0.0, 1.0)) * directional.intensity + ambient.intensity;
+                elem.value.shade.back = light.dot(Vec3::new(0.0, 0.0, -1.0))
                     * directional.intensity
                     + ambient.intensity;
                 elem.value.shade.left =
-                    light.dot(Vec3::new(1.0, 0.0, 0.0)) * directional.intensity
-                    + ambient.intensity;
-                elem.value.shade.right =
-                    light.dot(Vec3::new(-1.0, 0.0, 0.0))
+                    light.dot(Vec3::new(1.0, 0.0, 0.0)) * directional.intensity + ambient.intensity;
+                elem.value.shade.right = light.dot(Vec3::new(-1.0, 0.0, 0.0))
                     * directional.intensity
                     + ambient.intensity;
             }
-            
+
+            chunk.merge();
+
             insert.push(((x, y, z, w), ChunkUpdate::UpdateMesh));
         }
         for coords in remove {
@@ -117,9 +112,9 @@ pub fn shaded_light_update(
             let cy = y * w as i32 - w_2;
             let cz = z * w as i32 - w_2;
             let chunk = map.get((cx, cy, cz)).unwrap();
-            
+
             let mut light_map = vec![0.0; (chunk.width() + 2).pow(3)];
-            
+
             let width = chunk.width() as i32;
             let width_2 = width / 2;
 
@@ -138,10 +133,34 @@ pub fn shaded_light_update(
                                     let x = x + lx;
                                     let y = y + ly;
                                     let z = z + lz;
-                                    if x < -width_2 || x >= width_2 || y < -width_2 || y >= width_2 || z < -width_2 || z >= width_2 {
-                                        let sx = if x < -width_2 { -1 } else if x >= width_2 { 1 } else { 0 };
-                                        let sy = if y < -width_2 { -1 } else if y >= width_2 { 1 } else { 0 };
-                                        let sz = if z < -width_2 { -1 } else if z >= width_2 { 1 } else { 0 };
+                                    if x < -width_2
+                                        || x >= width_2
+                                        || y < -width_2
+                                        || y >= width_2
+                                        || z < -width_2
+                                        || z >= width_2
+                                    {
+                                        let sx = if x < -width_2 {
+                                            -1
+                                        } else if x >= width_2 {
+                                            1
+                                        } else {
+                                            0
+                                        };
+                                        let sy = if y < -width_2 {
+                                            -1
+                                        } else if y >= width_2 {
+                                            1
+                                        } else {
+                                            0
+                                        };
+                                        let sz = if z < -width_2 {
+                                            -1
+                                        } else if z >= width_2 {
+                                            1
+                                        } else {
+                                            0
+                                        };
                                         let cx = cx + width * sx;
                                         let cy = cy + width * sy;
                                         let cz = cz + width * sz;
@@ -195,7 +214,7 @@ pub fn shaded_light_update(
                     }
                 }
             }
-            
+
             let chunk = map.get_mut((cx, cy, cz)).unwrap();
 
             for x in -lm_width_2..lm_width_2 {
@@ -230,8 +249,9 @@ pub fn shaded_light_update(
             let light = -directional.direction;
 
             for elem in chunk.iter_mut() {
-                elem.value.shade.top =
-                    elem.value.shade.top * light.dot(Vec3::new(0.0, 1.0, 0.0)).max(0.0).min(1.0) * directional.intensity
+                elem.value.shade.top = elem.value.shade.top
+                    * light.dot(Vec3::new(0.0, 1.0, 0.0)).max(0.0).min(1.0)
+                    * directional.intensity
                     + ambient.intensity;
                 elem.value.shade.bottom = elem.value.shade.bottom
                     * light.dot(Vec3::new(0.0, -1.0, 0.0)).max(0.0).min(1.0)
@@ -245,8 +265,9 @@ pub fn shaded_light_update(
                     * light.dot(Vec3::new(0.0, 0.0, -1.0)).max(0.0).min(1.0)
                     * directional.intensity
                     + ambient.intensity;
-                elem.value.shade.left =
-                    elem.value.shade.left * light.dot(Vec3::new(1.0, 0.0, 0.0)).max(0.0).min(1.0) * directional.intensity
+                elem.value.shade.left = elem.value.shade.left
+                    * light.dot(Vec3::new(1.0, 0.0, 0.0)).max(0.0).min(1.0)
+                    * directional.intensity
                     + ambient.intensity;
                 elem.value.shade.right = elem.value.shade.right
                     * light.dot(Vec3::new(-1.0, 0.0, 0.0)).max(0.0).min(1.0)
@@ -254,6 +275,8 @@ pub fn shaded_light_update(
                     + ambient.intensity;
             }
             
+            chunk.merge();
+
             remove.push((x, y, z, w));
             insert.push(((x, y, z, w), ChunkUpdate::UpdateMesh));
         }
@@ -289,7 +312,7 @@ pub fn light_map_update<T: VoxelTracer>(
                 continue;
             }
             let chunk = chunk.unwrap();
-            
+
             let mut light_map = vec![None; chunk.width().pow(3)];
 
             let lm_width = chunk.width() as i32;
@@ -320,8 +343,13 @@ pub fn light_map_update<T: VoxelTracer>(
                             if block.is_some() {
                                 light = 0.0;
                             }
-                            if x < -lm_width_2 || y < -lm_width_2 || z < -lm_width_2
-                                || x >= lm_width_2 || y >= lm_width_2 || z >= lm_width_2 {
+                            if x < -lm_width_2
+                                || y < -lm_width_2
+                                || z < -lm_width_2
+                                || x >= lm_width_2
+                                || y >= lm_width_2
+                                || z >= lm_width_2
+                            {
                                 continue;
                             }
                             let idx = ((x + lm_width_2) * lm_width * lm_width) as usize
@@ -350,7 +378,7 @@ pub fn light_map_update<T: VoxelTracer>(
             }
 
             chunk.set_light(true);
-            
+
             insert.push(((x, y, z, w), ChunkUpdate::UpdateLight));
         }
         for coords in remove {

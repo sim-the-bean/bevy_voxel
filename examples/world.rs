@@ -8,7 +8,7 @@ use bevy_voxel::{
         prelude::*,
     },
     terrain::*,
-    world::{Map, MapUpdates, ChunkUpdate, MapComponents},
+    world::{ChunkUpdate, Map, MapComponents, MapUpdates},
 };
 
 pub const CHUNK_SIZE: u32 = 5;
@@ -74,10 +74,7 @@ pub fn main() {
             stage::UPDATE,
             light_map_update::<line_drawing::Bresenham3d<i32>>.system(),
         )
-        .add_system_to_stage(
-            stage::UPDATE,
-            shaded_light_update.system(),
-        )
+        .add_system_to_stage(stage::UPDATE, shaded_light_update.system())
         .add_system_to_stage(stage::POST_UPDATE, chunk_update.system())
         .run();
 }
@@ -91,7 +88,10 @@ fn setup(mut commands: Commands) {
     for cx in -world_width_2..world_width_2 {
         for cy in 0..world_height {
             for cz in -world_width_2..world_width_2 {
-                update.updates.insert((cx, cy, cz, chunk_size as usize), ChunkUpdate::GenerateChunk);
+                update.updates.insert(
+                    (cx, cy, cz, chunk_size as usize),
+                    ChunkUpdate::GenerateChunk,
+                );
             }
         }
     }
@@ -117,20 +117,21 @@ fn chunk_update(
                 _ => continue,
             }
             remove.push((x, y, z, w));
-            
+
             let w_2 = w as i32 / 2;
             let cx = x * w as i32 - w_2;
             let cy = y * w as i32 - w_2;
             let cz = z * w as i32 - w_2;
             let chunk = map.get((cx, cy, cz)).unwrap();
-            
+
             let mesh = generate_chunk_mesh(&map, &chunk);
-            commands
-                .spawn(ChunkRenderComponents {
-                    mesh: meshes.add(mesh),
-                    material: materials.add(VoxelMaterial { albedo: Color::WHITE }),
-                    ..Default::default()
-                });
+            commands.spawn(ChunkRenderComponents {
+                mesh: meshes.add(mesh),
+                material: materials.add(VoxelMaterial {
+                    albedo: Color::WHITE,
+                }),
+                ..Default::default()
+            });
         }
         for coords in remove {
             update.updates.remove(&coords);
