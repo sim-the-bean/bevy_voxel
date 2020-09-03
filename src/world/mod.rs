@@ -127,15 +127,7 @@ impl<T: Voxel> RTreeObject for Chunk<T> {
 
 impl<T: Voxel> PointDistance for Chunk<T> {
     fn distance_2(&self, point: &[i32; 3]) -> i32 {
-        let w = self.width() as i32;
-        let w_2 = w / 2;
-        let x = self.position.0 * w - w_2;
-        let y = self.position.1 * w - w_2;
-        let z = self.position.2 * w - w_2;
-        let dx = x - point[0];
-        let dy = y - point[1];
-        let dz = z - point[2];
-        dx * dx + dy * dy + dz * dz
+        self.envelope().distance_2(point)
     }
 }
 
