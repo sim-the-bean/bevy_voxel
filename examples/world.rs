@@ -1,3 +1,12 @@
+#[cfg(feature = "savedata")]
+use std::path::Path;
+
+#[cfg(feature = "savedata")]
+use serde::{de::DeserializeOwned, Serialize};
+
+#[cfg(feature = "savedata")]
+use bevy::app::AppExit;
+
 use bevy::{prelude::*, render::mesh::Mesh};
 
 use bevy_voxel::{
@@ -79,6 +88,7 @@ pub fn main() {
         })
         .add_resource(AmbientLight { intensity: 0.05 })
         .add_resource(params)
+        .init_resource::<ExitListenerState>()
         .add_stage_before(stage::PRE_UPDATE, "stage_terrain_generation")
         .add_stage_after("stage_terrain_generation", "stage_lod_update")
         .add_system_to_stage(
@@ -92,15 +102,42 @@ pub fn main() {
         )
         .add_system_to_stage(stage::UPDATE, shaded_light_update::<Block>.system())
         .add_system_to_stage(stage::POST_UPDATE, chunk_update::<Block>.system())
+        .add_system_to_stage(stage::POST_UPDATE, save_game::<Block>.system())
         .run();
 }
 
 /// set up a simple 3D scene
 fn setup(mut commands: Commands) {
+    commands.spawn(bevy_fly_camera::FlyCamera::default());
+
     let mut update = MapUpdates::default();
     let chunk_size = 2_i32.pow(CHUNK_SIZE as u32);
     let world_width_2 = WORLD_WIDTH / chunk_size / 2;
     let world_height = WORLD_HEIGHT / chunk_size;
+
+    if let Some(save_directory) = std::env::args().skip(1).next() {
+        let save_directory: &Path = save_directory.as_ref();
+        if save_directory.exists() {
+            for cx in -world_width_2..world_width_2 {
+                for cy in 0..world_height {
+                    for cz in -world_width_2..world_width_2 {
+                        update.updates.insert(
+                            (cx, cy, cz, chunk_size as usize),
+                            ChunkUpdate::UpdateLightMap,
+                        );
+                    }
+                }
+            }
+            commands.spawn(MapComponents { map_update: update }).with(
+                Map::<Block>::load(save_directory).expect(&format!(
+                    "couldn't load map from {}",
+                    save_directory.display()
+                )),
+            );
+            return;
+        }
+    }
+
     for cx in -world_width_2..world_width_2 {
         for cy in 0..world_height {
             for cz in -world_width_2..world_width_2 {
@@ -113,8 +150,7 @@ fn setup(mut commands: Commands) {
     }
     commands
         .spawn(MapComponents { map_update: update })
-        .with(Map::<Block>::default())
-        .spawn(bevy_fly_camera::FlyCamera::default());
+        .with(Map::<Block>::default());
 }
 
 fn chunk_update<T: VoxelExt>(
@@ -151,6 +187,31 @@ fn chunk_update<T: VoxelExt>(
         }
         for coords in remove {
             update.updates.remove(&coords);
+        }
+    }
+}
+
+#[cfg(feature = "savedata")]
+#[derive(Default)]
+pub struct ExitListenerState {
+    reader: EventReader<AppExit>,
+}
+
+#[cfg(feature = "savedata")]
+fn save_game<T: VoxelExt + Serialize + DeserializeOwned>(
+    mut state: ResMut<ExitListenerState>,
+    exit_events: Res<Events<AppExit>>,
+    mut query: Query<&Map<T>>,
+) {
+    if let Some(_) = state.reader.iter(&exit_events).next() {
+        if let Some(save_directory) = std::env::args().skip(1).next() {
+            let save_directory: &Path = save_directory.as_ref();
+            for map in &mut query.iter() {
+                map.save(save_directory).expect(&format!(
+                    "couldn't save map to {}",
+                    save_directory.display()
+                ));
+            }
         }
     }
 }
