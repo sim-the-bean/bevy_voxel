@@ -7,6 +7,9 @@ use rstar::{PointDistance, RTree, RTreeObject, AABB};
 
 use bevy::ecs::Bundle;
 
+#[cfg(feature = "savedata")]
+use crate::collections::RleTree;
+
 use crate::collections::{
     lod_tree::{Element, ElementMut, Voxel},
     LodTree,
@@ -14,7 +17,13 @@ use crate::collections::{
 
 pub type ChunkKey = (i32, i32, i32);
 
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg(feature = "savedata")]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SaveData<T> {
+    position: ChunkKey,
+    data: RleTree<T>,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Chunk<T> {
     position: ChunkKey,
@@ -106,6 +115,16 @@ impl<T: Voxel> Chunk<T> {
 
     pub fn contains_key(&self, coords: (i32, i32, i32)) -> bool {
         self.data.contains_key(coords)
+    }
+}
+
+#[cfg(feature = "savedata")]
+impl<T: Voxel + Serialize> Chunk<T> {
+    pub fn serializable(&self) -> SaveData<T> {
+        SaveData {
+            position: self.position,
+            data: RleTree::with_tree(&self.data),
+        }
     }
 }
 

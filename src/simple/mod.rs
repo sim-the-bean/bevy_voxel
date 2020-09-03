@@ -1,6 +1,10 @@
+#[cfg(feature = "savedata")]
 use serde::{Deserialize, Serialize};
 
 use bevy::prelude::*;
+
+#[cfg(feature = "savedata")]
+use crate::serialize::SerDePartialEq;
 
 use crate::{
     collections::lod_tree::Voxel,
@@ -48,8 +52,16 @@ impl Default for Shade {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Default, Debug, Clone, Copy, PartialEq)]
 pub struct Block {
+    #[cfg_attr(feature = "serde", serde(skip))]
     pub shade: Shade,
     pub color: Color,
+}
+
+#[cfg(feature = "savedata")]
+impl SerDePartialEq<Self> for Block {
+    fn serde_eq(&self, other: &Self) -> bool {
+        self.color == other.color
+    }
 }
 
 impl Voxel for Block {
