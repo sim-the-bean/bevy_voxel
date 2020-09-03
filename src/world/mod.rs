@@ -1,11 +1,20 @@
 use std::{borrow::Cow, collections::HashMap};
+#[cfg(feature = "savedata")]
+use std::{
+    fs::{self, File},
+    io::Read,
+    path::Path,
+};
 
 #[cfg(feature = "serde")]
-use serde::{Deserialize, Serialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 use rstar::{PointDistance, RTree, RTreeObject, AABB};
 
 use bevy::ecs::Bundle;
+
+#[cfg(feature = "savedata")]
+use crate::collections::RleTree;
 
 use crate::collections::{
     lod_tree::{Element, ElementMut, Voxel},
@@ -14,7 +23,13 @@ use crate::collections::{
 
 pub type ChunkKey = (i32, i32, i32);
 
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg(feature = "savedata")]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SaveData<T> {
+    position: ChunkKey,
+    data: RleTree<T>,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Chunk<T> {
     position: ChunkKey,
@@ -109,6 +124,36 @@ impl<T: Voxel> Chunk<T> {
     }
 }
 
+#[cfg(feature = "savedata")]
+impl<T: Voxel + Serialize + DeserializeOwned> Chunk<T> {
+    pub fn load<R: Read>(reader: R) -> bincode::Result<Self> {
+        Ok(Self::from(bincode::deserialize_from::<_, SaveData<T>>(
+            reader,
+        )?))
+    }
+
+    pub fn serializable(&self) -> SaveData<T> {
+        SaveData {
+            position: self.position,
+            data: RleTree::with_tree(&self.data),
+        }
+    }
+}
+
+#[cfg(feature = "savedata")]
+impl<T: Voxel> From<SaveData<T>> for Chunk<T> {
+    fn from(save: SaveData<T>) -> Self {
+        let data = LodTree::from(save.data);
+        let width = data.width();
+        Self {
+            position: save.position,
+            data,
+            light: LodTree::new(width),
+            has_light: false,
+        }
+    }
+}
+
 impl<T: Voxel> RTreeObject for Chunk<T> {
     type Envelope = AABB<[i32; 3]>;
 
@@ -175,6 +220,37 @@ impl<T: Voxel> Map<T> {
 
     pub fn iter_mut(&mut self) -> impl Iterator<Item = &'_ mut Chunk<T>> {
         self.map.iter_mut()
+    }
+}
+
+#[cfg(feature = "savedata")]
+impl<T: Voxel + Serialize + DeserializeOwned> Map<T> {
+    pub fn save<P: AsRef<Path>>(&self, save_directory: P) -> bincode::Result<()> {
+        let save_directory = save_directory.as_ref();
+        fs::create_dir_all(save_directory)?;
+        for chunk in &self.map {
+            let mut path = save_directory.to_path_buf();
+            let (x, y, z) = chunk.position();
+            path.push(format!("chunk.{}.{}.{}.gz", x, y, z));
+            let file = File::create(path)?;
+            let savedata = chunk.serializable();
+            bincode::serialize_into(
+                flate2::write::GzEncoder::new(file, flate2::Compression::default()),
+                &savedata,
+            )?;
+        }
+        Ok(())
+    }
+
+    pub fn load<P: AsRef<Path>>(save_directory: P) -> bincode::Result<Self> {
+        let save_directory = save_directory.as_ref();
+        let mut chunks = Vec::new();
+        for entry in save_directory.read_dir()? {
+            let file = flate2::read::GzDecoder::new(File::open(entry?.path())?);
+            let chunk = Chunk::load(file)?;
+            chunks.push(chunk);
+        }
+        Ok(Self::with_chunks(chunks))
     }
 }
 

@@ -1,6 +1,3 @@
-#[cfg(feature = "serde")]
-use serde::{Deserialize, Serialize};
-
 use std::{
     borrow::Cow,
     collections::{HashMap, HashSet},
@@ -8,6 +5,9 @@ use std::{
 };
 
 use int_traits::IntTraits;
+
+#[cfg(feature = "savedata")]
+use crate::{collections::RleTree, serialize::SerDePartialEq};
 
 fn depth_index(x: i32, y: i32, z: i32, depth: usize) -> usize {
     let width_2 = 1 << (depth - 1);
@@ -57,6 +57,13 @@ fn array_index(idx: usize, depth: usize) -> (i32, i32, i32) {
     (x - width_2, y - width_2, z - width_2)
 }
 
+#[cfg(feature = "savedata")]
+pub trait Voxel: SerDePartialEq<Self> + PartialEq + Clone + Send + Sync + 'static {
+    fn average(data: &[Self]) -> Option<Self>;
+    fn can_merge(&self) -> bool;
+}
+
+#[cfg(not(feature = "savedata"))]
 pub trait Voxel: PartialEq + Clone + Send + Sync + 'static {
     fn average(data: &[Self]) -> Option<Self>;
     fn can_merge(&self) -> bool;
@@ -72,14 +79,12 @@ impl Voxel for f32 {
     }
 }
 
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Node<T> {
     Ref(usize),
     Value(Option<T>, usize),
 }
 
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Default, Debug, Clone, PartialEq, Eq, Hash)]
 pub struct LodTree<T> {
     lod: usize,
@@ -369,6 +374,37 @@ impl<T: Voxel> LodTree<T> {
         self.get_impl(coords).is_some()
     }
 
+    pub fn opt_elements(&self) -> impl Iterator<Item = OptElement<'_, T>> {
+        let depth = self.depth;
+        let mut set = HashSet::new();
+        self.array
+            .iter()
+            .enumerate()
+            .flat_map(move |(mut i, mut node)| {
+                let (idx, value, width) = loop {
+                    match node {
+                        Node::Ref(idx) => {
+                            node = &self.array[*idx];
+                            i = *idx;
+                        }
+                        Node::Value(value, width) => break (i, value, *width),
+                    }
+                };
+                if set.contains(&idx) {
+                    return None;
+                }
+                set.insert(idx);
+                let (x, y, z) = array_index(idx, depth);
+                Some(OptElement {
+                    x,
+                    y,
+                    z,
+                    width,
+                    value,
+                })
+            })
+    }
+
     pub fn elements(&self) -> impl Iterator<Item = Element<'_, T>> {
         let depth = self.depth;
         let mut set = HashSet::new();
@@ -493,6 +529,57 @@ impl<T: PartialEq> LodTree<T> {
     }
 }
 
+#[cfg(feature = "savedata")]
+impl<T: Voxel> From<RleTree<T>> for LodTree<T> {
+    fn from(tree: RleTree<T>) -> Self {
+        let mut array = Vec::new();
+        let mut len = 0;
+        for node in tree {
+            len += node.value.as_ref().map(|_| node.len).unwrap_or_default();
+            let mut remaining = node.len;
+            if node.len.is_power_of_two() && node.len.log2() % 3 == 0 {
+                let width = node.len.cbrt();
+                let idx = array.len();
+                array.push(Node::Value(node.value, width));
+                for _ in 1..node.len {
+                    array.push(Node::Ref(idx));
+                }
+            } else {
+                let next = node.len.next_power_of_two();
+                let iter = (0..next.log2()).rev()
+                    .filter_map(|idx| if idx % 3 == 0 { Some(idx) } else { None });
+                for i in iter {
+                    let part = 1 << i;
+                    while part <= remaining {
+                        let width = part.cbrt();
+                        let idx = array.len();
+                        array.push(Node::Value(node.value.clone(), width));
+                        for _ in 1..part {
+                            array.push(Node::Ref(idx));
+                        }
+                        remaining -= part;
+                    }
+                }
+            }
+        }
+        Self {
+            lod: 0,
+            depth: array.len().cbrt().log2(),
+            len,
+            array,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OptElement<'a, T> {
+    pub x: i32,
+    pub y: i32,
+    pub z: i32,
+    pub width: usize,
+    pub value: &'a Option<T>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Element<'a, T: Clone> {
     pub x: i32,
@@ -586,32 +673,6 @@ mod tests {
         assert_eq!(vt.get((1, 1, 1)), Some(&1));
         assert_eq!(vt.get((2, 2, 2)), Some(&2));
         assert_eq!(vt.get((3, 3, 3)), Some(&3));
-    }
-
-    #[test]
-    #[cfg(feature = "serde")]
-    fn serde() {
-        let mut vt = LodTree::<i32>::new(8);
-        vt.insert((-4, -4, -4), -4);
-        vt.insert((-3, -3, -3), -3);
-        vt.insert((-2, -2, -2), -2);
-        vt.insert((-1, -1, -1), -1);
-        vt.insert((0, 0, 0), 0);
-        vt.insert((1, 1, 1), 1);
-        vt.insert((2, 2, 2), 2);
-        vt.insert((2, 2, 3), 2);
-        vt.insert((2, 3, 2), 2);
-        vt.insert((2, 3, 3), 2);
-        vt.insert((3, 2, 2), 2);
-        vt.insert((3, 2, 3), 2);
-        vt.insert((3, 3, 2), 2);
-        vt.insert((3, 3, 3), 2);
-
-        let serialized = serde_json::to_string(&vt).unwrap();
-
-        let deserialized: LodTree<i32> = serde_json::from_str(&serialized).unwrap();
-
-        assert_eq!(vt, deserialized);
     }
 
     #[test]
