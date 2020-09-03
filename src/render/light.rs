@@ -3,7 +3,6 @@ use bevy::prelude::*;
 use line_drawing::{Bresenham3d, VoxelOrigin, WalkVoxels};
 
 use crate::{
-    collections::lod_tree::Voxel,
     render::entity::{Face, VoxelExt},
     world::{ChunkUpdate, Map, MapUpdates},
 };

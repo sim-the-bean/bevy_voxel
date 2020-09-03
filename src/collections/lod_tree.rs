@@ -7,8 +7,6 @@ use std::{
     mem,
 };
 
-use bevy::prelude::Color;
-
 use int_traits::IntTraits;
 
 fn depth_index(x: i32, y: i32, z: i32, depth: usize) -> usize {

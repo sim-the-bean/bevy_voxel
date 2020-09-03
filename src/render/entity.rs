@@ -1,11 +1,7 @@
-#[cfg(feature = "serde")]
-use serde::{Deserialize, Serialize};
-
 use bevy::{
     asset::Handle,
     ecs::Bundle,
     render::{
-        color::Color,
         draw::Draw,
         mesh::Mesh,
         pipeline::{DynamicBinding, PipelineSpecialization, RenderPipeline, RenderPipelines},
@@ -48,9 +44,9 @@ pub trait VoxelExt: Voxel {
         offset: (f32, f32, f32),
     ) -> MeshPart;
 
-    fn set_shade(&mut self, face: Face, light: f32) {}
+    fn set_shade(&mut self, _face: Face, _light: f32) {}
 
-    fn shade(&mut self, face: Face) -> Option<f32> {
+    fn shade(&mut self, _face: Face) -> Option<f32> {
         None
     }
 }
