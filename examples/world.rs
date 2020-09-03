@@ -2,11 +2,12 @@ use bevy::{prelude::*, render::mesh::Mesh};
 
 use bevy_voxel::{
     render::{
-        entity::{generate_chunk_mesh, Block},
+        entity::{generate_chunk_mesh, VoxelExt},
         light::*,
         lod::lod_update,
         prelude::*,
     },
+    simple::Block,
     terrain::*,
     world::{ChunkUpdate, Map, MapComponents, MapUpdates},
 };
@@ -38,19 +39,31 @@ pub fn main() {
         ],
         layers: vec![
             Layer {
-                color: Color::rgb(0.08, 0.08, 0.08),
+                block: Block {
+                    color: Color::rgb(0.08, 0.08, 0.08),
+                    ..Default::default()
+                },
                 height: f64::INFINITY,
             },
             Layer {
-                color: Color::rgb(0.5, 0.5, 0.5),
+                block: Block {
+                    color: Color::rgb(0.5, 0.5, 0.5),
+                    ..Default::default()
+                },
                 height: 16.0,
             },
             Layer {
-                color: Color::rgb(0.396, 0.263, 0.129),
+                block: Block {
+                    color: Color::rgb(0.396, 0.263, 0.129),
+                    ..Default::default()
+                },
                 height: 3.0,
             },
             Layer {
-                color: Color::rgb(0.0, 0.416, 0.306),
+                block: Block {
+                    color: Color::rgb(0.0, 0.416, 0.306),
+                    ..Default::default()
+                },
                 height: 1.0,
             },
         ],
@@ -68,14 +81,17 @@ pub fn main() {
         .add_resource(params)
         .add_stage_before(stage::PRE_UPDATE, "stage_terrain_generation")
         .add_stage_after("stage_terrain_generation", "stage_lod_update")
-        .add_system_to_stage("stage_terrain_generation", terrain_generation.system())
-        .add_system_to_stage("stage_lod_update", lod_update.system())
+        .add_system_to_stage(
+            "stage_terrain_generation",
+            terrain_generation::<Block>.system(),
+        )
+        .add_system_to_stage("stage_lod_update", lod_update::<Block>.system())
         .add_system_to_stage(
             stage::UPDATE,
-            light_map_update::<line_drawing::Bresenham3d<i32>>.system(),
+            light_map_update::<Block, line_drawing::Bresenham3d<i32>>.system(),
         )
-        .add_system_to_stage(stage::UPDATE, shaded_light_update.system())
-        .add_system_to_stage(stage::POST_UPDATE, chunk_update.system())
+        .add_system_to_stage(stage::UPDATE, shaded_light_update::<Block>.system())
+        .add_system_to_stage(stage::POST_UPDATE, chunk_update::<Block>.system())
         .run();
 }
 
@@ -96,18 +112,16 @@ fn setup(mut commands: Commands) {
         }
     }
     commands
-        .spawn(MapComponents {
-            map_update: update,
-            ..Default::default()
-        })
+        .spawn(MapComponents { map_update: update })
+        .with(Map::<Block>::default())
         .spawn(bevy_fly_camera::FlyCamera::default());
 }
 
-fn chunk_update(
+fn chunk_update<T: VoxelExt>(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<VoxelMaterial>>,
-    mut query: Query<(&Map<Block>, &mut MapUpdates)>,
+    mut query: Query<(&Map<T>, &mut MapUpdates)>,
 ) {
     for (map, mut update) in &mut query.iter() {
         let mut remove = Vec::new();
