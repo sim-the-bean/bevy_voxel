@@ -86,7 +86,6 @@ impl<T: Voxel> Chunk<T> {
 
     pub fn set_lod(&mut self, lod: usize) {
         self.data.set_lod(lod);
-        self.light.set_lod(lod);
     }
 
     pub fn lod(&self) -> usize {

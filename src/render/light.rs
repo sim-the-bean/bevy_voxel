@@ -221,33 +221,47 @@ pub fn shaded_light_update(
 
             let chunk = map.get_mut((cx, cy, cz)).unwrap();
 
-            for x in -lm_width_2..lm_width_2 {
-                for y in -lm_width_2..lm_width_2 {
-                    for z in -lm_width_2..lm_width_2 {
-                        let idx = ((x + lm_width_2) * lm_width * lm_width) as usize
-                            + ((y + lm_width_2) * lm_width) as usize
-                            + (z + lm_width_2) as usize;
-                        let light = light_map[idx];
-                        if let Some(block) = chunk.get_mut((x, y - 1, z)) {
-                            block.shade.top = light;
-                        }
-                        if let Some(block) = chunk.get_mut((x, y + 1, z)) {
-                            block.shade.bottom = light;
-                        }
-                        if let Some(block) = chunk.get_mut((x, y, z - 1)) {
-                            block.shade.front = light;
-                        }
-                        if let Some(block) = chunk.get_mut((x, y, z + 1)) {
-                            block.shade.back = light;
-                        }
-                        if let Some(block) = chunk.get_mut((x - 1, y, z)) {
-                            block.shade.left = light;
-                        }
-                        if let Some(block) = chunk.get_mut((x + 1, y, z)) {
-                            block.shade.right = light;
-                        }
-                    }
-                }
+            for elem in chunk.iter_mut() {
+                let x = elem.x;
+                let y = elem.y;
+                let z = elem.z;
+                let block = elem.value;
+
+                let idx = ((x + lm_width_2) * lm_width * lm_width) as usize
+                    + ((y + 1 + lm_width_2) * lm_width) as usize
+                    + (z + lm_width_2) as usize;
+                let light = light_map[idx];
+                block.shade.top = light;
+
+                let idx = ((x + lm_width_2) * lm_width * lm_width) as usize
+                    + ((y - 1 + lm_width_2) * lm_width) as usize
+                    + (z + lm_width_2) as usize;
+                let light = light_map[idx];
+                block.shade.bottom = light;
+
+                let idx = ((x + lm_width_2) * lm_width * lm_width) as usize
+                    + ((y + lm_width_2) * lm_width) as usize
+                    + (z + 1 + lm_width_2) as usize;
+                let light = light_map[idx];
+                block.shade.front = light;
+
+                let idx = ((x + lm_width_2) * lm_width * lm_width) as usize
+                    + ((y + lm_width_2) * lm_width) as usize
+                    + (z - 1 + lm_width_2) as usize;
+                let light = light_map[idx];
+                block.shade.back = light;
+
+                let idx = ((x + 1 + lm_width_2) * lm_width * lm_width) as usize
+                    + ((y + lm_width_2) * lm_width) as usize
+                    + (z + lm_width_2) as usize;
+                let light = light_map[idx];
+                block.shade.left = light;
+
+                let idx = ((x - 1 + lm_width_2) * lm_width * lm_width) as usize
+                    + ((y + lm_width_2) * lm_width) as usize
+                    + (z + lm_width_2) as usize;
+                let light = light_map[idx];
+                block.shade.right = light;
             }
 
             let light = -directional.direction;

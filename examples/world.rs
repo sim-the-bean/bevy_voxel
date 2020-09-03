@@ -12,7 +12,7 @@ use bevy_voxel::{
 };
 
 pub const CHUNK_SIZE: u32 = 5;
-pub const WORLD_WIDTH: i32 = 64;
+pub const WORLD_WIDTH: i32 = 128;
 pub const WORLD_HEIGHT: i32 = 64;
 
 pub fn main() {

@@ -171,8 +171,6 @@ fn terrain_gen2_impl<T: NoiseFn<[f64; 2]> + Seedable + Default>(
         }
     }
 
-    chunk.merge();
-
     chunk
 }
 
@@ -234,8 +232,6 @@ fn terrain_gen3_impl<T: NoiseFn<[f64; 3]> + Seedable + Default>(
             }
         }
     }
-
-    chunk.merge();
 
     chunk
 }
