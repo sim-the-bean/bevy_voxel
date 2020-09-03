@@ -11,8 +11,6 @@ use bevy::prelude::Color;
 
 use int_traits::IntTraits;
 
-use crate::world::Shade;
-
 fn depth_index(x: i32, y: i32, z: i32, depth: usize) -> usize {
     let width_2 = 1 << (depth - 1);
 
@@ -61,21 +59,18 @@ fn array_index(idx: usize, depth: usize) -> (i32, i32, i32) {
     (x - width_2, y - width_2, z - width_2)
 }
 
-pub trait Voxel: PartialEq + Clone {
+pub trait Voxel: PartialEq + Clone + Send + Sync + 'static {
     fn average(data: &[Self]) -> Option<Self>;
-
-    fn shade(&self) -> Shade {
-        Shade::default()
-    }
-
-    fn color(&self) -> Color {
-        Color::rgba(1.0, 1.0, 1.0, 1.0)
-    }
+    fn can_merge(&self) -> bool;
 }
 
 impl Voxel for f32 {
     fn average(data: &[Self]) -> Option<Self> {
         Some(data.iter().copied().sum::<f32>() / data.len() as f32)
+    }
+
+    fn can_merge(&self) -> bool {
+        false
     }
 }
 

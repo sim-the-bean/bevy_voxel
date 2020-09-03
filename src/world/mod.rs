@@ -7,50 +7,10 @@ use rstar::{PointDistance, RTree, RTreeObject, AABB};
 
 use bevy::ecs::Bundle;
 
-use crate::{
-    collections::{
-        lod_tree::{Element, ElementMut, Voxel},
-        LodTree,
-    },
-    render::entity::Block,
+use crate::collections::{
+    lod_tree::{Element, ElementMut, Voxel},
+    LodTree,
 };
-
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Shade {
-    pub top: f32,
-    pub bottom: f32,
-    pub front: f32,
-    pub back: f32,
-    pub left: f32,
-    pub right: f32,
-}
-
-impl Shade {
-    pub fn zero() -> Self {
-        Shade {
-            top: 0.0,
-            bottom: 0.0,
-            front: 0.0,
-            back: 0.0,
-            left: 0.0,
-            right: 0.0,
-        }
-    }
-}
-
-impl Default for Shade {
-    fn default() -> Self {
-        Shade {
-            top: 1.0,
-            bottom: 1.0,
-            front: 1.0,
-            back: 1.0,
-            left: 1.0,
-            right: 1.0,
-        }
-    }
-}
 
 pub type ChunkKey = (i32, i32, i32);
 
@@ -239,17 +199,7 @@ pub struct MapUpdates {
     pub updates: HashMap<(i32, i32, i32, usize), ChunkUpdate>,
 }
 
-#[derive(Bundle)]
+#[derive(Default, Bundle)]
 pub struct MapComponents {
-    pub map: Map<Block>,
     pub map_update: MapUpdates,
-}
-
-impl Default for MapComponents {
-    fn default() -> Self {
-        Self {
-            map: Map::new(),
-            map_update: MapUpdates::default(),
-        }
-    }
 }

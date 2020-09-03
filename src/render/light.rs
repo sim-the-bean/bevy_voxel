@@ -3,7 +3,8 @@ use bevy::prelude::*;
 use line_drawing::{Bresenham3d, VoxelOrigin, WalkVoxels};
 
 use crate::{
-    render::entity::Block,
+    collections::lod_tree::Voxel,
+    render::entity::{Face, VoxelExt},
     world::{ChunkUpdate, Map, MapUpdates},
 };
 
@@ -36,10 +37,10 @@ pub struct AmbientLight {
     pub intensity: f32,
 }
 
-pub fn simple_light_update(
+pub fn simple_light_update<T: VoxelExt>(
     directional: Res<DirectionalLight>,
     ambient: Res<AmbientLight>,
-    mut query: Query<(&mut Map<Block>, &mut MapUpdates)>,
+    mut query: Query<(&mut Map<T>, &mut MapUpdates)>,
 ) {
     for (mut map, mut update) in &mut query.iter() {
         let mut remove = Vec::new();
@@ -64,24 +65,36 @@ pub fn simple_light_update(
             let light = -directional.direction;
 
             for elem in chunk.iter_mut() {
-                elem.value.shade.top = light.dot(Vec3::new(0.0, 1.0, 0.0)).max(0.0).min(1.0)
-                    * directional.intensity
-                    + ambient.intensity;
-                elem.value.shade.bottom = light.dot(Vec3::new(0.0, -1.0, 0.0)).max(0.0).min(1.0)
-                    * directional.intensity
-                    + ambient.intensity;
-                elem.value.shade.front = light.dot(Vec3::new(0.0, 0.0, 1.0)).max(0.0).min(1.0)
-                    * directional.intensity
-                    + ambient.intensity;
-                elem.value.shade.back = light.dot(Vec3::new(0.0, 0.0, -1.0)).max(0.0).min(1.0)
-                    * directional.intensity
-                    + ambient.intensity;
-                elem.value.shade.left = light.dot(Vec3::new(1.0, 0.0, 0.0)).max(0.0).min(1.0)
-                    * directional.intensity
-                    + ambient.intensity;
-                elem.value.shade.right = light.dot(Vec3::new(-1.0, 0.0, 0.0)).max(0.0).min(1.0)
-                    * directional.intensity
-                    + ambient.intensity;
+                elem.value.set_shade(
+                    Face::Top,
+                    light.dot(Vec3::new(0.0, 1.0, 0.0)).max(0.0).min(1.0) * directional.intensity
+                        + ambient.intensity,
+                );
+                elem.value.set_shade(
+                    Face::Bottom,
+                    light.dot(Vec3::new(0.0, -1.0, 0.0)).max(0.0).min(1.0) * directional.intensity
+                        + ambient.intensity,
+                );
+                elem.value.set_shade(
+                    Face::Front,
+                    light.dot(Vec3::new(0.0, 0.0, 1.0)).max(0.0).min(1.0) * directional.intensity
+                        + ambient.intensity,
+                );
+                elem.value.set_shade(
+                    Face::Back,
+                    light.dot(Vec3::new(0.0, 0.0, -1.0)).max(0.0).min(1.0) * directional.intensity
+                        + ambient.intensity,
+                );
+                elem.value.set_shade(
+                    Face::Left,
+                    light.dot(Vec3::new(1.0, 0.0, 0.0)).max(0.0).min(1.0) * directional.intensity
+                        + ambient.intensity,
+                );
+                elem.value.set_shade(
+                    Face::Right,
+                    light.dot(Vec3::new(-1.0, 0.0, 0.0)).max(0.0).min(1.0) * directional.intensity
+                        + ambient.intensity,
+                );
             }
 
             chunk.merge();
@@ -97,10 +110,10 @@ pub fn simple_light_update(
     }
 }
 
-pub fn shaded_light_update(
+pub fn shaded_light_update<T: VoxelExt>(
     directional: Res<DirectionalLight>,
     ambient: Res<AmbientLight>,
-    mut query: Query<(&mut Map<Block>, &mut MapUpdates)>,
+    mut query: Query<(&mut Map<T>, &mut MapUpdates)>,
 ) {
     for (mut map, mut update) in &mut query.iter() {
         let mut remove = Vec::new();
@@ -221,6 +234,8 @@ pub fn shaded_light_update(
 
             let chunk = map.get_mut((cx, cy, cz)).unwrap();
 
+            let dir = -directional.direction;
+
             for elem in chunk.iter_mut() {
                 let x = elem.x;
                 let y = elem.y;
@@ -231,66 +246,73 @@ pub fn shaded_light_update(
                     + ((y + 1 + lm_width_2) * lm_width) as usize
                     + (z + lm_width_2) as usize;
                 let light = light_map[idx];
-                block.shade.top = light;
+                block.set_shade(
+                    Face::Top,
+                    light
+                        * dir.dot(Vec3::new(0.0, 1.0, 0.0)).max(0.0).min(1.0)
+                        * directional.intensity
+                        + ambient.intensity,
+                );
 
                 let idx = ((x + lm_width_2) * lm_width * lm_width) as usize
                     + ((y - 1 + lm_width_2) * lm_width) as usize
                     + (z + lm_width_2) as usize;
                 let light = light_map[idx];
-                block.shade.bottom = light;
+                block.set_shade(
+                    Face::Bottom,
+                    light
+                        * dir.dot(Vec3::new(0.0, -1.0, 0.0)).max(0.0).min(1.0)
+                        * directional.intensity
+                        + ambient.intensity,
+                );
 
                 let idx = ((x + lm_width_2) * lm_width * lm_width) as usize
                     + ((y + lm_width_2) * lm_width) as usize
                     + (z + 1 + lm_width_2) as usize;
                 let light = light_map[idx];
-                block.shade.front = light;
+                block.set_shade(
+                    Face::Front,
+                    light
+                        * dir.dot(Vec3::new(0.0, 0.0, 1.0)).max(0.0).min(1.0)
+                        * directional.intensity
+                        + ambient.intensity,
+                );
 
                 let idx = ((x + lm_width_2) * lm_width * lm_width) as usize
                     + ((y + lm_width_2) * lm_width) as usize
                     + (z - 1 + lm_width_2) as usize;
                 let light = light_map[idx];
-                block.shade.back = light;
+                block.set_shade(
+                    Face::Back,
+                    light
+                        * dir.dot(Vec3::new(0.0, 0.0, -1.0)).max(0.0).min(1.0)
+                        * directional.intensity
+                        + ambient.intensity,
+                );
 
                 let idx = ((x + 1 + lm_width_2) * lm_width * lm_width) as usize
                     + ((y + lm_width_2) * lm_width) as usize
                     + (z + lm_width_2) as usize;
                 let light = light_map[idx];
-                block.shade.left = light;
+                block.set_shade(
+                    Face::Left,
+                    light
+                        * dir.dot(Vec3::new(1.0, 0.0, 0.0)).max(0.0).min(1.0)
+                        * directional.intensity
+                        + ambient.intensity,
+                );
 
                 let idx = ((x - 1 + lm_width_2) * lm_width * lm_width) as usize
                     + ((y + lm_width_2) * lm_width) as usize
                     + (z + lm_width_2) as usize;
                 let light = light_map[idx];
-                block.shade.right = light;
-            }
-
-            let light = -directional.direction;
-
-            for elem in chunk.iter_mut() {
-                elem.value.shade.top = elem.value.shade.top
-                    * light.dot(Vec3::new(0.0, 1.0, 0.0)).max(0.0).min(1.0)
-                    * directional.intensity
-                    + ambient.intensity;
-                elem.value.shade.bottom = elem.value.shade.bottom
-                    * light.dot(Vec3::new(0.0, -1.0, 0.0)).max(0.0).min(1.0)
-                    * directional.intensity
-                    + ambient.intensity;
-                elem.value.shade.front = elem.value.shade.front
-                    * light.dot(Vec3::new(0.0, 0.0, 1.0)).max(0.0).min(1.0)
-                    * directional.intensity
-                    + ambient.intensity;
-                elem.value.shade.back = elem.value.shade.back
-                    * light.dot(Vec3::new(0.0, 0.0, -1.0)).max(0.0).min(1.0)
-                    * directional.intensity
-                    + ambient.intensity;
-                elem.value.shade.left = elem.value.shade.left
-                    * light.dot(Vec3::new(1.0, 0.0, 0.0)).max(0.0).min(1.0)
-                    * directional.intensity
-                    + ambient.intensity;
-                elem.value.shade.right = elem.value.shade.right
-                    * light.dot(Vec3::new(-1.0, 0.0, 0.0)).max(0.0).min(1.0)
-                    * directional.intensity
-                    + ambient.intensity;
+                block.set_shade(
+                    Face::Right,
+                    light
+                        * dir.dot(Vec3::new(-1.0, 0.0, 0.0)).max(0.0).min(1.0)
+                        * directional.intensity
+                        + ambient.intensity,
+                );
             }
 
             chunk.merge();
@@ -307,9 +329,9 @@ pub fn shaded_light_update(
     }
 }
 
-pub fn light_map_update<T: VoxelTracer>(
+pub fn light_map_update<T: VoxelExt, R: VoxelTracer>(
     directional: Res<DirectionalLight>,
-    mut query: Query<(&mut Map<Block>, &mut MapUpdates)>,
+    mut query: Query<(&mut Map<T>, &mut MapUpdates)>,
 ) {
     for (mut map, mut update) in &mut query.iter() {
         let mut remove = Vec::new();
@@ -349,7 +371,7 @@ pub fn light_map_update<T: VoxelTracer>(
                         let light_source =
                             Vec3::new(x as _, y as _, z as _) + directional.direction * -100.0;
                         let mut light = 1.0;
-                        for (x, y, z) in T::new(
+                        for (x, y, z) in R::new(
                             (
                                 light_source.x() as _,
                                 light_source.y() as _,

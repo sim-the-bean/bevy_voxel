@@ -3,8 +3,8 @@ use bevy::prelude::*;
 use noise::{NoiseFn, OpenSimplex, Perlin, Seedable, SuperSimplex};
 
 use crate::{
-    render::entity::Block,
-    world::{Chunk, ChunkUpdate, Map, MapUpdates, Shade},
+    collections::lod_tree::Voxel,
+    world::{Chunk, ChunkUpdate, Map, MapUpdates},
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -33,23 +33,23 @@ pub struct Octave {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Layer {
-    pub color: Color,
+pub struct Layer<T: Voxel> {
+    pub block: T,
     pub height: f64,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct TerrainGenParameters {
+pub struct TerrainGenParameters<T: Voxel> {
     pub seed: u32,
     pub noise_type: NoiseType,
     pub dimensions: NoiseDimensions,
     pub chunk_size: u32,
     pub granularity: u32,
     pub octaves: Vec<Octave>,
-    pub layers: Vec<Layer>,
+    pub layers: Vec<Layer<T>>,
 }
 
-impl TerrainGenParameters {
+impl<T: Voxel> TerrainGenParameters<T> {
     pub fn chunk_width(&self) -> usize {
         2_usize.pow(self.chunk_size - self.granularity)
     }
@@ -58,25 +58,25 @@ impl TerrainGenParameters {
         2_usize.pow(self.granularity)
     }
 
-    pub fn generate(&self, coords: (i32, i32, i32)) -> Chunk<Block> {
+    pub fn generate(&self, coords: (i32, i32, i32)) -> Chunk<T> {
         match self.dimensions {
             NoiseDimensions::Two => match self.noise_type {
-                NoiseType::Perlin => terrain_gen2_impl::<Perlin>(self, coords),
-                NoiseType::OpenSimplex => terrain_gen2_impl::<OpenSimplex>(self, coords),
-                NoiseType::SuperSimplex => terrain_gen2_impl::<SuperSimplex>(self, coords),
+                NoiseType::Perlin => terrain_gen2_impl::<_, Perlin>(self, coords),
+                NoiseType::OpenSimplex => terrain_gen2_impl::<_, OpenSimplex>(self, coords),
+                NoiseType::SuperSimplex => terrain_gen2_impl::<_, SuperSimplex>(self, coords),
             },
             NoiseDimensions::Three => match self.noise_type {
-                NoiseType::Perlin => terrain_gen3_impl::<Perlin>(self, coords),
-                NoiseType::OpenSimplex => terrain_gen3_impl::<OpenSimplex>(self, coords),
-                NoiseType::SuperSimplex => terrain_gen3_impl::<SuperSimplex>(self, coords),
+                NoiseType::Perlin => terrain_gen3_impl::<_, Perlin>(self, coords),
+                NoiseType::OpenSimplex => terrain_gen3_impl::<_, OpenSimplex>(self, coords),
+                NoiseType::SuperSimplex => terrain_gen3_impl::<_, SuperSimplex>(self, coords),
             },
         }
     }
 }
 
-pub fn terrain_generation(
-    params: Res<TerrainGenParameters>,
-    mut query: Query<(&mut Map<Block>, &mut MapUpdates)>,
+pub fn terrain_generation<T: Voxel>(
+    params: Res<TerrainGenParameters<T>>,
+    mut query: Query<(&mut Map<T>, &mut MapUpdates)>,
 ) {
     let max_count = 1;
     let mut count = 0;
@@ -118,11 +118,11 @@ pub fn terrain_generation(
     }
 }
 
-fn terrain_gen2_impl<T: NoiseFn<[f64; 2]> + Seedable + Default>(
-    params: &TerrainGenParameters,
+fn terrain_gen2_impl<T: Voxel, N: NoiseFn<[f64; 2]> + Seedable + Default>(
+    params: &TerrainGenParameters<T>,
     (cx, cy, cz): (i32, i32, i32),
-) -> Chunk<Block> {
-    let noise = T::default().set_seed(params.seed);
+) -> Chunk<T> {
+    let noise = N::default().set_seed(params.seed);
     let mut chunk = Chunk::new(params.chunk_size, (cx, cy, cz));
 
     let size = params.chunk_width() as i32;
@@ -156,13 +156,7 @@ fn terrain_gen2_impl<T: NoiseFn<[f64; 2]> + Seedable + Default>(
                     for ix in 0..params.unit_width() as i32 {
                         for iy in 0..params.unit_width() as i32 {
                             for iz in 0..params.unit_width() as i32 {
-                                chunk.insert(
-                                    (x + ix, y + iy, z + iz),
-                                    Block {
-                                        color: layer.color,
-                                        shade: Shade::zero(),
-                                    },
-                                );
+                                chunk.insert((x + ix, y + iy, z + iz), layer.block.clone());
                             }
                         }
                     }
@@ -174,11 +168,11 @@ fn terrain_gen2_impl<T: NoiseFn<[f64; 2]> + Seedable + Default>(
     chunk
 }
 
-fn terrain_gen3_impl<T: NoiseFn<[f64; 3]> + Seedable + Default>(
-    params: &TerrainGenParameters,
+fn terrain_gen3_impl<T: Voxel, N: NoiseFn<[f64; 3]> + Seedable + Default>(
+    params: &TerrainGenParameters<T>,
     (cx, cy, cz): (i32, i32, i32),
-) -> Chunk<Block> {
-    let noise = T::default().set_seed(params.seed);
+) -> Chunk<T> {
+    let noise = N::default().set_seed(params.seed);
     let mut chunk = Chunk::new(params.chunk_size, (cx, cy, cz));
 
     let size = params.chunk_width() as i32;
@@ -218,13 +212,7 @@ fn terrain_gen3_impl<T: NoiseFn<[f64; 3]> + Seedable + Default>(
                     for ix in 0..params.unit_width() as i32 {
                         for iy in 0..params.unit_width() as i32 {
                             for iz in 0..params.unit_width() as i32 {
-                                chunk.insert(
-                                    (x + ix, y + iy, z + iz),
-                                    Block {
-                                        color: layer.color,
-                                        shade: Shade::zero(),
-                                    },
-                                );
+                                chunk.insert((x + ix, y + iy, z + iz), layer.block.clone());
                             }
                         }
                     }

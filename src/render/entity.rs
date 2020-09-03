@@ -17,67 +17,41 @@ use bevy::{
 use crate::{
     collections::lod_tree::Voxel,
     render::{material::VoxelMaterial, render_graph::pipeline},
-    world::{Chunk, Map, Shade},
+    world::{Chunk, Map},
 };
 
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Default, Debug, Clone, Copy, PartialEq)]
-pub struct Block {
-    pub shade: Shade,
-    pub color: Color,
+#[derive(Debug, Clone)]
+pub struct MeshPart {
+    pub positions: Vec<[f32; 3]>,
+    pub shades: Vec<f32>,
+    pub colors: Vec<[f32; 4]>,
+    pub indices: Vec<u32>,
 }
 
-impl Voxel for Block {
-    fn average(data: &[Self]) -> Option<Self> {
-        if data.is_empty() {
-            return None;
-        }
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Face {
+    Top,
+    Bottom,
+    Front,
+    Back,
+    Left,
+    Right,
+}
 
-        let mut color = Color::rgba(0.0, 0.0, 0.0, 0.0);
-        let mut top = 0.0;
-        let mut bottom = 0.0;
-        let mut left = 0.0;
-        let mut right = 0.0;
-        let mut front = 0.0;
-        let mut back = 0.0;
+pub trait VoxelExt: Voxel {
+    fn mesh(
+        &self,
+        coords: (i32, i32, i32),
+        map: &Map<Self>,
+        chunk: &Chunk<Self>,
+        width: usize,
+        offset: (f32, f32, f32),
+    ) -> MeshPart;
 
-        for block in data {
-            top += block.shade().top;
-            bottom += block.shade().bottom;
-            left += block.shade().left;
-            right += block.shade().right;
-            front += block.shade().front;
-            back += block.shade().back;
-            color += block.color();
-        }
+    fn set_shade(&mut self, face: Face, light: f32) {}
 
-        color *= (data.len() as f32).recip();
-        top *= (data.len() as f32).recip();
-        bottom *= (data.len() as f32).recip();
-        left *= (data.len() as f32).recip();
-        right *= (data.len() as f32).recip();
-        front *= (data.len() as f32).recip();
-        back *= (data.len() as f32).recip();
-
-        Some(Self {
-            color,
-            shade: Shade {
-                top,
-                bottom,
-                left,
-                right,
-                front,
-                back,
-            },
-        })
-    }
-
-    fn shade(&self) -> Shade {
-        self.shade
-    }
-
-    fn color(&self) -> Color {
-        self.color
+    fn shade(&mut self, face: Face) -> Option<f32> {
+        None
     }
 }
 
@@ -127,373 +101,7 @@ impl Default for ChunkRenderComponents {
     }
 }
 
-fn generate_front_side<T: Voxel>(
-    block: &T,
-    map: &Map<T>,
-    chunk: &Chunk<T>,
-    (x, y, z): (i32, i32, i32),
-    width: usize,
-    offset: (f32, f32, f32),
-    indices: &mut Vec<u32>,
-    n: &mut u32,
-) -> Option<([[f32; 3]; 4], [f32; 4], [[f32; 4]; 4])> {
-    let width = width as i32;
-    let cw = chunk.width() as i32;
-    let cw_2 = cw / 2;
-    for dx in 0..width {
-        for dy in 0..width {
-            let render = if z + width >= cw_2 {
-                let (cx, cy, cz) = chunk.position();
-                let cx = cx * cw - cw_2;
-                let cy = cy * cw - cw_2;
-                let cz = cz * cw - cw_2 + cw;
-                if let Some(chunk) = map.get((cx, cy, cz)) {
-                    !chunk.contains_key((x + dx, y + dy, -cw_2))
-                } else {
-                    false
-                }
-            } else {
-                !chunk.contains_key((x + dx, y + dy, z + width))
-            };
-            if render {
-                let size = width as f32;
-                let x = x as f32 + offset.0;
-                let y = y as f32 + offset.1;
-                let z = z as f32 + offset.2;
-                indices.extend(&[*n + 0, *n + 1, *n + 2, *n + 2, *n + 3, *n + 0]);
-                *n += 4;
-                return Some((
-                    [
-                        [x, y, z + size],
-                        [x + size, y, z + size],
-                        [x + size, y + size, z + size],
-                        [x, y + size, z + size],
-                    ],
-                    [
-                        block.shade().front,
-                        block.shade().front,
-                        block.shade().front,
-                        block.shade().front,
-                    ],
-                    [
-                        block.color().into(),
-                        block.color().into(),
-                        block.color().into(),
-                        block.color().into(),
-                    ],
-                ));
-            }
-        }
-    }
-    None
-}
-
-fn generate_back_side<T: Voxel>(
-    block: &T,
-    map: &Map<T>,
-    chunk: &Chunk<T>,
-    (x, y, z): (i32, i32, i32),
-    width: usize,
-    offset: (f32, f32, f32),
-    indices: &mut Vec<u32>,
-    n: &mut u32,
-) -> Option<([[f32; 3]; 4], [f32; 4], [[f32; 4]; 4])> {
-    let width = width as i32;
-    let cw = chunk.width() as i32;
-    let cw_2 = cw / 2;
-    for dx in 0..width {
-        for dy in 0..width {
-            let render = if z - 1 < -cw_2 {
-                let (cx, cy, cz) = chunk.position();
-                let cx = cx * cw - cw_2;
-                let cy = cy * cw - cw_2;
-                let cz = cz * cw - cw_2 - cw;
-                if let Some(chunk) = map.get((cx, cy, cz)) {
-                    !chunk.contains_key((x + dx, y + dy, cw_2 - 1))
-                } else {
-                    false
-                }
-            } else {
-                !chunk.contains_key((x + dx, y + dy, z - 1))
-            };
-            if render {
-                let size = width as f32;
-                let x = x as f32 + offset.0;
-                let y = y as f32 + offset.1;
-                let z = z as f32 + offset.2;
-                indices.extend(&[*n + 0, *n + 1, *n + 2, *n + 2, *n + 3, *n + 0]);
-                *n += 4;
-                return Some((
-                    [
-                        [x, y + size, z],
-                        [x + size, y + size, z],
-                        [x + size, y, z],
-                        [x, y, z],
-                    ],
-                    [
-                        block.shade().back,
-                        block.shade().back,
-                        block.shade().back,
-                        block.shade().back,
-                    ],
-                    [
-                        block.color().into(),
-                        block.color().into(),
-                        block.color().into(),
-                        block.color().into(),
-                    ],
-                ));
-            }
-        }
-    }
-    None
-}
-
-fn generate_right_side<T: Voxel>(
-    block: &T,
-    map: &Map<T>,
-    chunk: &Chunk<T>,
-    (x, y, z): (i32, i32, i32),
-    width: usize,
-    offset: (f32, f32, f32),
-    indices: &mut Vec<u32>,
-    n: &mut u32,
-) -> Option<([[f32; 3]; 4], [f32; 4], [[f32; 4]; 4])> {
-    let width = width as i32;
-    let cw = chunk.width() as i32;
-    let cw_2 = cw / 2;
-    for dy in 0..width {
-        for dz in 0..width {
-            let render = if x - 1 < -cw_2 {
-                let (cx, cy, cz) = chunk.position();
-                let cx = cx * cw - cw_2 - cw;
-                let cy = cy * cw - cw_2;
-                let cz = cz * cw - cw_2;
-                if let Some(chunk) = map.get((cx, cy, cz)) {
-                    !chunk.contains_key((cw_2 - 1, y + dy, z + dz))
-                } else {
-                    false
-                }
-            } else {
-                !chunk.contains_key((x - 1, y + dy, z + dz))
-            };
-            if render {
-                let size = width as f32;
-                let x = x as f32 + offset.0;
-                let y = y as f32 + offset.1;
-                let z = z as f32 + offset.2;
-                indices.extend(&[*n + 0, *n + 1, *n + 2, *n + 2, *n + 3, *n + 0]);
-                *n += 4;
-                return Some((
-                    [
-                        [x, y, z],
-                        [x, y, z + size],
-                        [x, y + size, z + size],
-                        [x, y + size, z],
-                    ],
-                    [
-                        block.shade().right,
-                        block.shade().right,
-                        block.shade().right,
-                        block.shade().right,
-                    ],
-                    [
-                        block.color().into(),
-                        block.color().into(),
-                        block.color().into(),
-                        block.color().into(),
-                    ],
-                ));
-            }
-        }
-    }
-    None
-}
-
-fn generate_left_side<T: Voxel>(
-    block: &T,
-    map: &Map<T>,
-    chunk: &Chunk<T>,
-    (x, y, z): (i32, i32, i32),
-    width: usize,
-    offset: (f32, f32, f32),
-    indices: &mut Vec<u32>,
-    n: &mut u32,
-) -> Option<([[f32; 3]; 4], [f32; 4], [[f32; 4]; 4])> {
-    let width = width as i32;
-    let cw = chunk.width() as i32;
-    let cw_2 = cw / 2;
-    for dy in 0..width {
-        for dz in 0..width {
-            let render = if x + width >= cw_2 {
-                let (cx, cy, cz) = chunk.position();
-                let cx = cx * cw - cw_2 + cw;
-                let cy = cy * cw - cw_2;
-                let cz = cz * cw - cw_2;
-                if let Some(chunk) = map.get((cx, cy, cz)) {
-                    !chunk.contains_key((-cw_2, y + dy, z + dz))
-                } else {
-                    false
-                }
-            } else {
-                !chunk.contains_key((x + width, y + dy, z + dz))
-            };
-            if render {
-                let size = width as f32;
-                let x = x as f32 + offset.0;
-                let y = y as f32 + offset.1;
-                let z = z as f32 + offset.2;
-                indices.extend(&[*n + 0, *n + 1, *n + 2, *n + 2, *n + 3, *n + 0]);
-                *n += 4;
-                return Some((
-                    [
-                        [x + size, y, z],
-                        [x + size, y + size, z],
-                        [x + size, y + size, z + size],
-                        [x + size, y, z + size],
-                    ],
-                    [
-                        block.shade().left,
-                        block.shade().left,
-                        block.shade().left,
-                        block.shade().left,
-                    ],
-                    [
-                        block.color().into(),
-                        block.color().into(),
-                        block.color().into(),
-                        block.color().into(),
-                    ],
-                ));
-            }
-        }
-    }
-    None
-}
-
-fn generate_top_side<T: Voxel>(
-    block: &T,
-    map: &Map<T>,
-    chunk: &Chunk<T>,
-    (x, y, z): (i32, i32, i32),
-    width: usize,
-    offset: (f32, f32, f32),
-    indices: &mut Vec<u32>,
-    n: &mut u32,
-) -> Option<([[f32; 3]; 4], [f32; 4], [[f32; 4]; 4])> {
-    let width = width as i32;
-    let cw = chunk.width() as i32;
-    let cw_2 = cw / 2;
-    for dx in 0..width {
-        for dz in 0..width {
-            let render = if y + width >= cw_2 {
-                let (cx, cy, cz) = chunk.position();
-                let cx = cx * cw - cw_2;
-                let cy = cy * cw - cw_2 + cw;
-                let cz = cz * cw - cw_2;
-                if let Some(chunk) = map.get((cx, cy, cz)) {
-                    !chunk.contains_key((x + dx, -cw_2, z + dz))
-                } else {
-                    false
-                }
-            } else {
-                !chunk.contains_key((x + dx, y + width, z + dz))
-            };
-            if render {
-                let size = width as f32;
-                let x = x as f32 + offset.0;
-                let y = y as f32 + offset.1;
-                let z = z as f32 + offset.2;
-                indices.extend(&[*n + 0, *n + 1, *n + 2, *n + 2, *n + 3, *n + 0]);
-                *n += 4;
-                return Some((
-                    [
-                        [x + size, y + size, z],
-                        [x, y + size, z],
-                        [x, y + size, z + size],
-                        [x + size, y + size, z + size],
-                    ],
-                    [
-                        block.shade().top,
-                        block.shade().top,
-                        block.shade().top,
-                        block.shade().top,
-                    ],
-                    [
-                        block.color().into(),
-                        block.color().into(),
-                        block.color().into(),
-                        block.color().into(),
-                    ],
-                ));
-            }
-        }
-    }
-    None
-}
-
-fn generate_bottom_side<T: Voxel>(
-    block: &T,
-    map: &Map<T>,
-    chunk: &Chunk<T>,
-    (x, y, z): (i32, i32, i32),
-    width: usize,
-    offset: (f32, f32, f32),
-    indices: &mut Vec<u32>,
-    n: &mut u32,
-) -> Option<([[f32; 3]; 4], [f32; 4], [[f32; 4]; 4])> {
-    let width = width as i32;
-    let cw = chunk.width() as i32;
-    let cw_2 = cw / 2;
-    for dx in 0..width {
-        for dz in 0..width {
-            let render = if y - 1 < -cw_2 {
-                let (cx, cy, cz) = chunk.position();
-                let cx = cx * cw - cw_2;
-                let cy = cy * cw - cw_2 - cw;
-                let cz = cz * cw - cw_2;
-                if let Some(chunk) = map.get((cx, cy, cz)) {
-                    !chunk.contains_key((x + dx, cw_2 - 1, z + dz))
-                } else {
-                    false
-                }
-            } else {
-                !chunk.contains_key((x + dx, y - 1, z + dz))
-            };
-            if render {
-                let size = width as f32;
-                let x = x as f32 + offset.0;
-                let y = y as f32 + offset.1;
-                let z = z as f32 + offset.2;
-                indices.extend(&[*n + 0, *n + 1, *n + 2, *n + 2, *n + 3, *n + 0]);
-                *n += 4;
-                return Some((
-                    [
-                        [x + size, y, z + size],
-                        [x, y, z + size],
-                        [x, y, z],
-                        [x + size, y, z],
-                    ],
-                    [
-                        block.shade().bottom,
-                        block.shade().bottom,
-                        block.shade().bottom,
-                        block.shade().bottom,
-                    ],
-                    [
-                        block.color().into(),
-                        block.color().into(),
-                        block.color().into(),
-                        block.color().into(),
-                    ],
-                ));
-            }
-        }
-    }
-    None
-}
-
-pub fn generate_chunk_mesh<T: Voxel>(map: &Map<T>, chunk: &Chunk<T>) -> Option<Mesh> {
+pub fn generate_chunk_mesh<T: VoxelExt>(map: &Map<T>, chunk: &Chunk<T>) -> Option<Mesh> {
     let mut positions = Vec::new();
     let mut shades = Vec::new();
     let mut colors = Vec::new();
@@ -507,102 +115,22 @@ pub fn generate_chunk_mesh<T: Voxel>(map: &Map<T>, chunk: &Chunk<T>) -> Option<M
     let cz = coords.2 as f32 * chunk_width;
 
     for elem in chunk.iter() {
-        let top = generate_top_side(
-            &*elem.value,
+        let mut mesh = elem.value.mesh(
+            (elem.x, elem.y, elem.z),
             map,
             chunk,
-            (elem.x, elem.y, elem.z),
             elem.width,
             (cx, cy, cz),
-            &mut indices,
-            &mut n,
-        );
-        let bottom = generate_bottom_side(
-            &*elem.value,
-            map,
-            chunk,
-            (elem.x, elem.y, elem.z),
-            elem.width,
-            (cx, cy, cz),
-            &mut indices,
-            &mut n,
-        );
-        let right = generate_right_side(
-            &*elem.value,
-            map,
-            chunk,
-            (elem.x, elem.y, elem.z),
-            elem.width,
-            (cx, cy, cz),
-            &mut indices,
-            &mut n,
-        );
-        let left = generate_left_side(
-            &*elem.value,
-            map,
-            chunk,
-            (elem.x, elem.y, elem.z),
-            elem.width,
-            (cx, cy, cz),
-            &mut indices,
-            &mut n,
-        );
-        let front = generate_front_side(
-            &*elem.value,
-            map,
-            chunk,
-            (elem.x, elem.y, elem.z),
-            elem.width,
-            (cx, cy, cz),
-            &mut indices,
-            &mut n,
-        );
-        let back = generate_back_side(
-            &*elem.value,
-            map,
-            chunk,
-            (elem.x, elem.y, elem.z),
-            elem.width,
-            (cx, cy, cz),
-            &mut indices,
-            &mut n,
         );
 
-        if let Some(top) = top {
-            positions.extend(&top.0);
-            shades.extend(&top.1);
-            colors.extend(&top.2);
-        }
+        let count = mesh.positions.len();
+        mesh.indices.iter_mut().for_each(|i| *i += n as u32);
+        n += count;
 
-        if let Some(bottom) = bottom {
-            positions.extend(&bottom.0);
-            shades.extend(&bottom.1);
-            colors.extend(&bottom.2);
-        }
-
-        if let Some(right) = right {
-            positions.extend(&right.0);
-            shades.extend(&right.1);
-            colors.extend(&right.2);
-        }
-
-        if let Some(left) = left {
-            positions.extend(&left.0);
-            shades.extend(&left.1);
-            colors.extend(&left.2);
-        }
-
-        if let Some(front) = front {
-            positions.extend(&front.0);
-            shades.extend(&front.1);
-            colors.extend(&front.2);
-        }
-
-        if let Some(back) = back {
-            positions.extend(&back.0);
-            shades.extend(&back.1);
-            colors.extend(&back.2);
-        }
+        positions.extend(mesh.positions);
+        shades.extend(mesh.shades);
+        colors.extend(mesh.colors);
+        indices.extend(mesh.indices);
     }
 
     if positions.is_empty() {

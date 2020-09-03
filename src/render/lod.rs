@@ -4,11 +4,11 @@ use bevy::{
     transform::prelude::Translation,
 };
 
-use crate::{render::entity::Block, world::Map};
+use crate::{collections::lod_tree::Voxel, world::Map};
 
-pub fn lod_update(
+pub fn lod_update<T: Voxel>(
     camera: Res<ActiveCameras>,
-    mut query: Query<&mut Map<Block>>,
+    mut query: Query<&mut Map<T>>,
     translation: Query<&Translation>,
 ) {
     let (camera_x, camera_y, camera_z) = if let Some(camera) = camera.get(base::camera::CAMERA3D) {
