@@ -24,7 +24,7 @@ use bevy_voxel::{
 };
 
 pub const CHUNK_SIZE: u32 = 5;
-pub const WORLD_WIDTH: i32 = 512;
+pub const WORLD_WIDTH: i32 = 128;
 pub const WORLD_HEIGHT: i32 = 64;
 
 pub fn main() {
@@ -34,6 +34,7 @@ pub fn main() {
         dimensions: NoiseDimensions::Two,
         chunk_size: CHUNK_SIZE,
         granularity: 1,
+        filter: Filter::Bilinear(2),
         octaves: vec![
             Octave {
                 amplitude: 8.0,
@@ -91,6 +92,7 @@ pub fn main() {
         .add_resource(AmbientLight { intensity: 0.05 })
         .add_resource(params)
         .init_resource::<ExitListenerState>()
+        .init_resource::<HeightMap>()
         .add_stage_before(stage::PRE_UPDATE, "stage_terrain_generation")
         .add_stage_after("stage_terrain_generation", "stage_lod_update")
         .add_system_to_stage(
