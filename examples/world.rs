@@ -9,6 +9,8 @@ use bevy::app::AppExit;
 
 use bevy::{prelude::*, render::mesh::Mesh};
 
+use bevy_fly_camera::FlyCamera;
+
 use bevy_voxel::{
     render::{
         entity::{generate_chunk_mesh, VoxelExt},
@@ -22,7 +24,7 @@ use bevy_voxel::{
 };
 
 pub const CHUNK_SIZE: u32 = 5;
-pub const WORLD_WIDTH: i32 = 128;
+pub const WORLD_WIDTH: i32 = 512;
 pub const WORLD_HEIGHT: i32 = 64;
 
 pub fn main() {
@@ -108,12 +110,15 @@ pub fn main() {
 
 /// set up a simple 3D scene
 fn setup(mut commands: Commands) {
-    commands.spawn(bevy_fly_camera::FlyCamera::default());
-
     let mut update = MapUpdates::default();
     let chunk_size = 2_i32.pow(CHUNK_SIZE as u32);
     let world_width_2 = WORLD_WIDTH / chunk_size / 2;
     let world_height = WORLD_HEIGHT / chunk_size;
+
+    commands.spawn(FlyCamera {
+        translation: Translation::new(0.0, WORLD_HEIGHT as f32 - chunk_size as f32, 0.0),
+        ..Default::default()
+    });
 
     if let Some(save_directory) = std::env::args().skip(1).next() {
         let save_directory: &Path = save_directory.as_ref();
@@ -121,8 +126,11 @@ fn setup(mut commands: Commands) {
             for cx in -world_width_2..world_width_2 {
                 for cy in 0..world_height {
                     for cz in -world_width_2..world_width_2 {
+                        let x = cx * chunk_size;
+                        let y = cy * chunk_size;
+                        let z = cz * chunk_size;
                         update.updates.insert(
-                            (cx, cy, cz, chunk_size as usize),
+                            (x, y, z),
                             ChunkUpdate::UpdateLightMap,
                         );
                     }
@@ -139,10 +147,13 @@ fn setup(mut commands: Commands) {
     }
 
     for cx in -world_width_2..world_width_2 {
-        for cy in 0..world_height {
+        for cy in -1..world_height - 1 {
             for cz in -world_width_2..world_width_2 {
+                let x = cx * chunk_size;
+                let y = cy * chunk_size;
+                let z = cz * chunk_size;
                 update.updates.insert(
-                    (cx, cy, cz, chunk_size as usize),
+                    (x, y, z),
                     ChunkUpdate::GenerateChunk,
                 );
             }
@@ -161,18 +172,14 @@ fn chunk_update<T: VoxelExt>(
 ) {
     for (map, mut update) in &mut query.iter() {
         let mut remove = Vec::new();
-        for (&(x, y, z, w), update) in &update.updates {
+        for (&(x, y, z), update) in &update.updates {
             match update {
                 ChunkUpdate::UpdateMesh => {}
                 _ => continue,
             }
-            remove.push((x, y, z, w));
+            remove.push((x, y, z));
 
-            let w_2 = w as i32 / 2;
-            let cx = x * w as i32 - w_2;
-            let cy = y * w as i32 - w_2;
-            let cz = z * w as i32 - w_2;
-            let chunk = map.get((cx, cy, cz)).unwrap();
+            let chunk = map.get((x, y, z)).unwrap();
 
             let mesh = generate_chunk_mesh(&map, &chunk);
             if let Some(mesh) = mesh {
@@ -181,6 +188,7 @@ fn chunk_update<T: VoxelExt>(
                     material: materials.add(VoxelMaterial {
                         albedo: Color::WHITE,
                     }),
+                    translation: Translation::new(x as f32, y as f32, z as f32),
                     ..Default::default()
                 });
             }

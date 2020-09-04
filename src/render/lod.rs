@@ -24,9 +24,9 @@ pub fn lod_update<T: Voxel>(
     for mut world in &mut query.iter() {
         for chunk in &mut world.iter_mut() {
             let (x, y, z) = chunk.position();
-            let lod = ((camera_x - x * chunk.width() as i32).abs() / 128)
-                .max((camera_y - y * chunk.width() as i32).abs() / 128)
-                .max((camera_z - z * chunk.width() as i32).abs() / 128)
+            let lod = ((camera_x - x).abs() / 128)
+                .max((camera_y - y).abs() / 128)
+                .max((camera_z - z).abs() / 128)
                 as usize;
             chunk.set_lod(lod);
         }

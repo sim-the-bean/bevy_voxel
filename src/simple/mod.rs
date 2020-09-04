@@ -71,30 +71,24 @@ impl Voxel for Block {
         }
 
         let mut color = Color::rgba(0.0, 0.0, 0.0, 0.0);
-        let mut top = 0.0;
-        let mut bottom = 0.0;
-        let mut left = 0.0;
-        let mut right = 0.0;
-        let mut front = 0.0;
-        let mut back = 0.0;
+        let mut top = 0.0_f32;
+        let mut bottom = 0.0_f32;
+        let mut left = 0.0_f32;
+        let mut right = 0.0_f32;
+        let mut front = 0.0_f32;
+        let mut back = 0.0_f32;
 
         for block in data {
-            top += block.shade.top;
-            bottom += block.shade.bottom;
-            left += block.shade.left;
-            right += block.shade.right;
-            front += block.shade.front;
-            back += block.shade.back;
+            top = top.max(block.shade.top);
+            bottom = bottom.max(block.shade.bottom);
+            left = left.max(block.shade.left);
+            right = right.max(block.shade.right);
+            front = front.max(block.shade.front);
+            back = back.max(block.shade.back);
             color += block.color;
         }
 
         color *= (data.len() as f32).recip();
-        top *= (data.len() as f32).recip();
-        bottom *= (data.len() as f32).recip();
-        left *= (data.len() as f32).recip();
-        right *= (data.len() as f32).recip();
-        front *= (data.len() as f32).recip();
-        back *= (data.len() as f32).recip();
 
         Some(Self {
             color,
@@ -121,7 +115,6 @@ impl VoxelExt for Block {
         map: &Map<Self>,
         chunk: &Chunk<Self>,
         width: usize,
-        offset: (f32, f32, f32),
     ) -> MeshPart {
         let mut positions = Vec::new();
         let mut shades = Vec::new();
@@ -135,7 +128,6 @@ impl VoxelExt for Block {
             chunk,
             coords,
             width,
-            offset,
             &mut indices,
             &mut n,
         ) {
@@ -150,7 +142,6 @@ impl VoxelExt for Block {
             chunk,
             coords,
             width,
-            offset,
             &mut indices,
             &mut n,
         ) {
@@ -165,7 +156,6 @@ impl VoxelExt for Block {
             chunk,
             coords,
             width,
-            offset,
             &mut indices,
             &mut n,
         ) {
@@ -180,7 +170,6 @@ impl VoxelExt for Block {
             chunk,
             coords,
             width,
-            offset,
             &mut indices,
             &mut n,
         ) {
@@ -195,7 +184,6 @@ impl VoxelExt for Block {
             chunk,
             coords,
             width,
-            offset,
             &mut indices,
             &mut n,
         ) {
@@ -210,7 +198,6 @@ impl VoxelExt for Block {
             chunk,
             coords,
             width,
-            offset,
             &mut indices,
             &mut n,
         ) {
@@ -256,22 +243,18 @@ fn generate_front_side(
     chunk: &Chunk<Block>,
     (x, y, z): (i32, i32, i32),
     width: usize,
-    offset: (f32, f32, f32),
     indices: &mut Vec<u32>,
     n: &mut u32,
 ) -> Option<([[f32; 3]; 4], [f32; 4], [[f32; 4]; 4])> {
     let width = width as i32;
     let cw = chunk.width() as i32;
-    let cw_2 = cw / 2;
     for dx in 0..width {
         for dy in 0..width {
-            let render = if z + width >= cw_2 {
+            let render = if z + width >= cw {
                 let (cx, cy, cz) = chunk.position();
-                let cx = cx * cw - cw_2;
-                let cy = cy * cw - cw_2;
-                let cz = cz * cw - cw_2 + cw;
+                let cz = cz + cw;
                 if let Some(chunk) = map.get((cx, cy, cz)) {
-                    !chunk.contains_key((x + dx, y + dy, -cw_2))
+                    !chunk.contains_key((x + dx, y + dy, 0))
                 } else {
                     false
                 }
@@ -280,9 +263,9 @@ fn generate_front_side(
             };
             if render {
                 let size = width as f32;
-                let x = x as f32 + offset.0;
-                let y = y as f32 + offset.1;
-                let z = z as f32 + offset.2;
+                let x = x as f32;
+                let y = y as f32;
+                let z = z as f32;
                 indices.extend(&[*n + 0, *n + 1, *n + 2, *n + 2, *n + 3, *n + 0]);
                 *n += 4;
                 return Some((
@@ -317,22 +300,18 @@ fn generate_back_side(
     chunk: &Chunk<Block>,
     (x, y, z): (i32, i32, i32),
     width: usize,
-    offset: (f32, f32, f32),
     indices: &mut Vec<u32>,
     n: &mut u32,
 ) -> Option<([[f32; 3]; 4], [f32; 4], [[f32; 4]; 4])> {
     let width = width as i32;
     let cw = chunk.width() as i32;
-    let cw_2 = cw / 2;
     for dx in 0..width {
         for dy in 0..width {
-            let render = if z - 1 < -cw_2 {
+            let render = if z - 1 < 0 {
                 let (cx, cy, cz) = chunk.position();
-                let cx = cx * cw - cw_2;
-                let cy = cy * cw - cw_2;
-                let cz = cz * cw - cw_2 - cw;
+                let cz = cz - cw;
                 if let Some(chunk) = map.get((cx, cy, cz)) {
-                    !chunk.contains_key((x + dx, y + dy, cw_2 - 1))
+                    !chunk.contains_key((x + dx, y + dy, cw - 1))
                 } else {
                     false
                 }
@@ -341,9 +320,9 @@ fn generate_back_side(
             };
             if render {
                 let size = width as f32;
-                let x = x as f32 + offset.0;
-                let y = y as f32 + offset.1;
-                let z = z as f32 + offset.2;
+                let x = x as f32;
+                let y = y as f32;
+                let z = z as f32;
                 indices.extend(&[*n + 0, *n + 1, *n + 2, *n + 2, *n + 3, *n + 0]);
                 *n += 4;
                 return Some((
@@ -378,22 +357,18 @@ fn generate_right_side(
     chunk: &Chunk<Block>,
     (x, y, z): (i32, i32, i32),
     width: usize,
-    offset: (f32, f32, f32),
     indices: &mut Vec<u32>,
     n: &mut u32,
 ) -> Option<([[f32; 3]; 4], [f32; 4], [[f32; 4]; 4])> {
     let width = width as i32;
     let cw = chunk.width() as i32;
-    let cw_2 = cw / 2;
     for dy in 0..width {
         for dz in 0..width {
-            let render = if x - 1 < -cw_2 {
+            let render = if x - 1 < 0 {
                 let (cx, cy, cz) = chunk.position();
-                let cx = cx * cw - cw_2 - cw;
-                let cy = cy * cw - cw_2;
-                let cz = cz * cw - cw_2;
+                let cx = cx - cw;
                 if let Some(chunk) = map.get((cx, cy, cz)) {
-                    !chunk.contains_key((cw_2 - 1, y + dy, z + dz))
+                    !chunk.contains_key((cw - 1, y + dy, z + dz))
                 } else {
                     false
                 }
@@ -402,9 +377,9 @@ fn generate_right_side(
             };
             if render {
                 let size = width as f32;
-                let x = x as f32 + offset.0;
-                let y = y as f32 + offset.1;
-                let z = z as f32 + offset.2;
+                let x = x as f32;
+                let y = y as f32;
+                let z = z as f32;
                 indices.extend(&[*n + 0, *n + 1, *n + 2, *n + 2, *n + 3, *n + 0]);
                 *n += 4;
                 return Some((
@@ -439,22 +414,18 @@ fn generate_left_side(
     chunk: &Chunk<Block>,
     (x, y, z): (i32, i32, i32),
     width: usize,
-    offset: (f32, f32, f32),
     indices: &mut Vec<u32>,
     n: &mut u32,
 ) -> Option<([[f32; 3]; 4], [f32; 4], [[f32; 4]; 4])> {
     let width = width as i32;
     let cw = chunk.width() as i32;
-    let cw_2 = cw / 2;
     for dy in 0..width {
         for dz in 0..width {
-            let render = if x + width >= cw_2 {
+            let render = if x + width >= cw {
                 let (cx, cy, cz) = chunk.position();
-                let cx = cx * cw - cw_2 + cw;
-                let cy = cy * cw - cw_2;
-                let cz = cz * cw - cw_2;
+                let cx = cx + cw;
                 if let Some(chunk) = map.get((cx, cy, cz)) {
-                    !chunk.contains_key((-cw_2, y + dy, z + dz))
+                    !chunk.contains_key((0, y + dy, z + dz))
                 } else {
                     false
                 }
@@ -463,9 +434,9 @@ fn generate_left_side(
             };
             if render {
                 let size = width as f32;
-                let x = x as f32 + offset.0;
-                let y = y as f32 + offset.1;
-                let z = z as f32 + offset.2;
+                let x = x as f32;
+                let y = y as f32;
+                let z = z as f32;
                 indices.extend(&[*n + 0, *n + 1, *n + 2, *n + 2, *n + 3, *n + 0]);
                 *n += 4;
                 return Some((
@@ -500,22 +471,18 @@ fn generate_top_side(
     chunk: &Chunk<Block>,
     (x, y, z): (i32, i32, i32),
     width: usize,
-    offset: (f32, f32, f32),
     indices: &mut Vec<u32>,
     n: &mut u32,
 ) -> Option<([[f32; 3]; 4], [f32; 4], [[f32; 4]; 4])> {
     let width = width as i32;
     let cw = chunk.width() as i32;
-    let cw_2 = cw / 2;
     for dx in 0..width {
         for dz in 0..width {
-            let render = if y + width >= cw_2 {
+            let render = if y + width >= cw {
                 let (cx, cy, cz) = chunk.position();
-                let cx = cx * cw - cw_2;
-                let cy = cy * cw - cw_2 + cw;
-                let cz = cz * cw - cw_2;
+                let cy = cy + cw;
                 if let Some(chunk) = map.get((cx, cy, cz)) {
-                    !chunk.contains_key((x + dx, -cw_2, z + dz))
+                    !chunk.contains_key((x + dx, 0, z + dz))
                 } else {
                     false
                 }
@@ -524,9 +491,9 @@ fn generate_top_side(
             };
             if render {
                 let size = width as f32;
-                let x = x as f32 + offset.0;
-                let y = y as f32 + offset.1;
-                let z = z as f32 + offset.2;
+                let x = x as f32;
+                let y = y as f32;
+                let z = z as f32;
                 indices.extend(&[*n + 0, *n + 1, *n + 2, *n + 2, *n + 3, *n + 0]);
                 *n += 4;
                 return Some((
@@ -561,22 +528,18 @@ fn generate_bottom_side(
     chunk: &Chunk<Block>,
     (x, y, z): (i32, i32, i32),
     width: usize,
-    offset: (f32, f32, f32),
     indices: &mut Vec<u32>,
     n: &mut u32,
 ) -> Option<([[f32; 3]; 4], [f32; 4], [[f32; 4]; 4])> {
     let width = width as i32;
     let cw = chunk.width() as i32;
-    let cw_2 = cw / 2;
     for dx in 0..width {
         for dz in 0..width {
-            let render = if y - 1 < -cw_2 {
+            let render = if y - 1 < 0 {
                 let (cx, cy, cz) = chunk.position();
-                let cx = cx * cw - cw_2;
-                let cy = cy * cw - cw_2 - cw;
-                let cz = cz * cw - cw_2;
+                let cy = cy - cw;
                 if let Some(chunk) = map.get((cx, cy, cz)) {
-                    !chunk.contains_key((x + dx, cw_2 - 1, z + dz))
+                    !chunk.contains_key((x + dx, cw - 1, z + dz))
                 } else {
                     false
                 }
@@ -585,9 +548,9 @@ fn generate_bottom_side(
             };
             if render {
                 let size = width as f32;
-                let x = x as f32 + offset.0;
-                let y = y as f32 + offset.1;
-                let z = z as f32 + offset.2;
+                let x = x as f32;
+                let y = y as f32;
+                let z = z as f32;
                 indices.extend(&[*n + 0, *n + 1, *n + 2, *n + 2, *n + 3, *n + 0]);
                 *n += 4;
                 return Some((

@@ -44,18 +44,14 @@ pub fn simple_light_update<T: VoxelExt>(
     for (mut map, mut update) in &mut query.iter() {
         let mut remove = Vec::new();
         let mut insert = Vec::new();
-        for (&(x, y, z, w), update) in &update.updates {
+        for (&(x, y, z), update) in &update.updates {
             match update {
                 ChunkUpdate::UpdateLightMap => {}
                 _ => continue,
             }
-            remove.push((x, y, z, w));
+            remove.push((x, y, z));
 
-            let w_2 = w as i32 / 2;
-            let cx = x * w as i32 - w_2;
-            let cy = y * w as i32 - w_2;
-            let cz = z * w as i32 - w_2;
-            let chunk = map.get_mut((cx, cy, cz));
+            let chunk = map.get_mut((x, y, z));
             if chunk.is_none() {
                 continue;
             }
@@ -98,7 +94,7 @@ pub fn simple_light_update<T: VoxelExt>(
 
             chunk.merge();
 
-            insert.push(((x, y, z, w), ChunkUpdate::UpdateMesh));
+            insert.push(((x, y, z), ChunkUpdate::UpdateMesh));
         }
         for coords in remove {
             update.updates.remove(&coords);
@@ -117,29 +113,23 @@ pub fn shaded_light_update<T: VoxelExt>(
     for (mut map, mut update) in &mut query.iter() {
         let mut remove = Vec::new();
         let mut insert = Vec::new();
-        'outer: for (&(x, y, z, w), update) in &update.updates {
+        'outer: for (&(cx, cy, cz), update) in &update.updates {
             match update {
                 ChunkUpdate::UpdateLight => {}
                 _ => continue,
             }
 
-            let w_2 = w as i32 / 2;
-            let cx = x * w as i32 - w_2;
-            let cy = y * w as i32 - w_2;
-            let cz = z * w as i32 - w_2;
             let chunk = map.get((cx, cy, cz)).unwrap();
 
             let mut light_map = vec![0.0; (chunk.width() + 2).pow(3)];
 
             let width = chunk.width() as i32;
-            let width_2 = width / 2;
 
             let lm_width = chunk.width() as i32 + 2;
-            let lm_width_2 = lm_width / 2;
 
-            for x in -lm_width_2..lm_width_2 {
-                for y in -lm_width_2..lm_width_2 {
-                    for z in -lm_width_2..lm_width_2 {
+            for x in -1..lm_width - 1 {
+                for y in -1..lm_width - 1 {
+                    for z in -1..lm_width - 1 {
                         let mut light = 0.0;
                         let mut count = 0;
                         let range = 1;
@@ -149,30 +139,30 @@ pub fn shaded_light_update<T: VoxelExt>(
                                     let x = x + lx;
                                     let y = y + ly;
                                     let z = z + lz;
-                                    if x < -width_2
-                                        || x >= width_2
-                                        || y < -width_2
-                                        || y >= width_2
-                                        || z < -width_2
-                                        || z >= width_2
+                                    if x < 0
+                                        || x >= width
+                                        || y < 0
+                                        || y >= width
+                                        || z < 0
+                                        || z >= width
                                     {
-                                        let sx = if x < -width_2 {
+                                        let sx = if x < 0 {
                                             -1
-                                        } else if x >= width_2 {
+                                        } else if x >= width {
                                             1
                                         } else {
                                             0
                                         };
-                                        let sy = if y < -width_2 {
+                                        let sy = if y < 0 {
                                             -1
-                                        } else if y >= width_2 {
+                                        } else if y >= width {
                                             1
                                         } else {
                                             0
                                         };
-                                        let sz = if z < -width_2 {
+                                        let sz = if z < 0 {
                                             -1
-                                        } else if z >= width_2 {
+                                        } else if z >= width {
                                             1
                                         } else {
                                             0
@@ -187,22 +177,22 @@ pub fn shaded_light_update<T: VoxelExt>(
                                             if !chunk.has_light() {
                                                 continue 'outer;
                                             }
-                                            while x >= width_2 {
+                                            while x >= width {
                                                 x -= width;
                                             }
-                                            while x < -width_2 {
+                                            while x < 0 {
                                                 x += width;
                                             }
-                                            while y >= width_2 {
+                                            while y >= width {
                                                 y -= width;
                                             }
-                                            while y < -width_2 {
+                                            while y < 0 {
                                                 y += width;
                                             }
-                                            while z >= width_2 {
+                                            while z >= width {
                                                 z -= width;
                                             }
-                                            while z < -width_2 {
+                                            while z < 0 {
                                                 z += width;
                                             }
                                             if let Some(l) = chunk.light((x, y, z)) {
@@ -223,9 +213,9 @@ pub fn shaded_light_update<T: VoxelExt>(
                             count = 1;
                         }
                         let light = light / count as f32;
-                        let idx = ((x + lm_width_2) * lm_width * lm_width) as usize
-                            + ((y + lm_width_2) * lm_width) as usize
-                            + (z + lm_width_2) as usize;
+                        let idx = ((x + 1) * lm_width * lm_width) as usize
+                            + ((y + 1) * lm_width) as usize
+                            + (z + 1) as usize;
                         light_map[idx] = light;
                     }
                 }
@@ -241,9 +231,9 @@ pub fn shaded_light_update<T: VoxelExt>(
                 let z = elem.z;
                 let block = elem.value;
 
-                let idx = ((x + lm_width_2) * lm_width * lm_width) as usize
-                    + ((y + 1 + lm_width_2) * lm_width) as usize
-                    + (z + lm_width_2) as usize;
+                let idx = ((x + 1) * lm_width * lm_width) as usize
+                    + ((y + 2) * lm_width) as usize
+                    + (z + 1) as usize;
                 let light = light_map[idx];
                 block.set_shade(
                     Face::Top,
@@ -253,9 +243,9 @@ pub fn shaded_light_update<T: VoxelExt>(
                         + ambient.intensity,
                 );
 
-                let idx = ((x + lm_width_2) * lm_width * lm_width) as usize
-                    + ((y - 1 + lm_width_2) * lm_width) as usize
-                    + (z + lm_width_2) as usize;
+                let idx = ((x + 1) * lm_width * lm_width) as usize
+                    + (y * lm_width) as usize
+                    + (z + 1) as usize;
                 let light = light_map[idx];
                 block.set_shade(
                     Face::Bottom,
@@ -265,9 +255,9 @@ pub fn shaded_light_update<T: VoxelExt>(
                         + ambient.intensity,
                 );
 
-                let idx = ((x + lm_width_2) * lm_width * lm_width) as usize
-                    + ((y + lm_width_2) * lm_width) as usize
-                    + (z + 1 + lm_width_2) as usize;
+                let idx = ((x + 1) * lm_width * lm_width) as usize
+                    + ((y + 1) * lm_width) as usize
+                    + (z + 2) as usize;
                 let light = light_map[idx];
                 block.set_shade(
                     Face::Front,
@@ -277,9 +267,9 @@ pub fn shaded_light_update<T: VoxelExt>(
                         + ambient.intensity,
                 );
 
-                let idx = ((x + lm_width_2) * lm_width * lm_width) as usize
-                    + ((y + lm_width_2) * lm_width) as usize
-                    + (z - 1 + lm_width_2) as usize;
+                let idx = ((x + 1) * lm_width * lm_width) as usize
+                    + ((y + 1) * lm_width) as usize
+                    + z as usize;
                 let light = light_map[idx];
                 block.set_shade(
                     Face::Back,
@@ -289,9 +279,9 @@ pub fn shaded_light_update<T: VoxelExt>(
                         + ambient.intensity,
                 );
 
-                let idx = ((x + 1 + lm_width_2) * lm_width * lm_width) as usize
-                    + ((y + lm_width_2) * lm_width) as usize
-                    + (z + lm_width_2) as usize;
+                let idx = ((x + 2) * lm_width * lm_width) as usize
+                    + ((y + 1) * lm_width) as usize
+                    + (z + 1) as usize;
                 let light = light_map[idx];
                 block.set_shade(
                     Face::Left,
@@ -301,9 +291,9 @@ pub fn shaded_light_update<T: VoxelExt>(
                         + ambient.intensity,
                 );
 
-                let idx = ((x - 1 + lm_width_2) * lm_width * lm_width) as usize
-                    + ((y + lm_width_2) * lm_width) as usize
-                    + (z + lm_width_2) as usize;
+                let idx = (x * lm_width * lm_width) as usize
+                    + ((y + 1) * lm_width) as usize
+                    + (z + 1) as usize;
                 let light = light_map[idx];
                 block.set_shade(
                     Face::Right,
@@ -316,8 +306,8 @@ pub fn shaded_light_update<T: VoxelExt>(
 
             chunk.merge();
 
-            remove.push((x, y, z, w));
-            insert.push(((x, y, z, w), ChunkUpdate::UpdateMesh));
+            remove.push((cx, cy, cz));
+            insert.push(((cx, cy, cz), ChunkUpdate::UpdateMesh));
         }
         for coords in remove {
             update.updates.remove(&coords);
@@ -335,17 +325,13 @@ pub fn light_map_update<T: VoxelExt, R: VoxelTracer>(
     for (mut map, mut update) in &mut query.iter() {
         let mut remove = Vec::new();
         let mut insert = Vec::new();
-        for (&(x, y, z, w), update) in &update.updates {
+        for (&(cx, cy, cz), update) in &update.updates {
             match update {
                 ChunkUpdate::UpdateLightMap => {}
                 _ => continue,
             }
-            remove.push((x, y, z, w));
+            remove.push((cx, cy, cz));
 
-            let w_2 = w as i32 / 2;
-            let cx = x * w as i32 - w_2;
-            let cy = y * w as i32 - w_2;
-            let cz = z * w as i32 - w_2;
             let chunk = map.get_mut((cx, cy, cz));
             if chunk.is_none() {
                 continue;
@@ -355,14 +341,13 @@ pub fn light_map_update<T: VoxelExt, R: VoxelTracer>(
             let mut light_map = vec![None; chunk.width().pow(3)];
 
             let lm_width = chunk.width() as i32;
-            let lm_width_2 = lm_width / 2;
 
-            for y in -lm_width_2..lm_width_2 {
-                for x in -lm_width_2..lm_width_2 {
-                    for z in -lm_width_2..lm_width_2 {
-                        let idx = ((x + lm_width_2) * lm_width * lm_width) as usize
-                            + ((y + lm_width_2) * lm_width) as usize
-                            + (z + lm_width_2) as usize;
+            for y in 0..lm_width {
+                for x in 0..lm_width {
+                    for z in 0..lm_width {
+                        let idx = (x * lm_width * lm_width) as usize
+                            + (y * lm_width) as usize
+                            + z as usize;
                         if light_map[idx].is_some() {
                             continue;
                         }
@@ -382,18 +367,18 @@ pub fn light_map_update<T: VoxelExt, R: VoxelTracer>(
                             if block.is_some() {
                                 light = 0.0;
                             }
-                            if x < -lm_width_2
-                                || y < -lm_width_2
-                                || z < -lm_width_2
-                                || x >= lm_width_2
-                                || y >= lm_width_2
-                                || z >= lm_width_2
+                            if x < 0
+                                || y < 0
+                                || z < 0
+                                || x >= lm_width
+                                || y >= lm_width
+                                || z >= lm_width
                             {
                                 continue;
                             }
-                            let idx = ((x + lm_width_2) * lm_width * lm_width) as usize
-                                + ((y + lm_width_2) * lm_width) as usize
-                                + (z + lm_width_2) as usize;
+                            let idx = (x * lm_width * lm_width) as usize
+                                + (y * lm_width) as usize
+                                + z as usize;
                             if let Some(map) = light_map.get_mut(idx) {
                                 if map.is_none() {
                                     *map = Some(light);
@@ -404,12 +389,12 @@ pub fn light_map_update<T: VoxelExt, R: VoxelTracer>(
                 }
             }
 
-            for x in -lm_width_2..lm_width_2 {
-                for y in -lm_width_2..lm_width_2 {
-                    for z in -lm_width_2..lm_width_2 {
-                        let idx = ((x + lm_width_2) * lm_width * lm_width) as usize
-                            + ((y + lm_width_2) * lm_width) as usize
-                            + (z + lm_width_2) as usize;
+            for x in 0..lm_width {
+                for y in 0..lm_width {
+                    for z in 0..lm_width {
+                        let idx = (x * lm_width * lm_width) as usize
+                            + (y * lm_width) as usize
+                            + z as usize;
                         let light = light_map[idx];
                         chunk.insert_light((x, y, z), light.unwrap_or_default());
                     }
@@ -418,7 +403,7 @@ pub fn light_map_update<T: VoxelExt, R: VoxelTracer>(
 
             chunk.set_light(true);
 
-            insert.push(((x, y, z, w), ChunkUpdate::UpdateLight));
+            insert.push(((cx, cy, cz), ChunkUpdate::UpdateLight));
         }
         for coords in remove {
             update.updates.remove(&coords);

@@ -9,14 +9,8 @@ use int_traits::IntTraits;
 #[cfg(feature = "savedata")]
 use crate::{collections::RleTree, serialize::SerDePartialEq};
 
-fn depth_index(x: i32, y: i32, z: i32, depth: usize) -> usize {
-    let width_2 = 1 << (depth - 1);
-
+fn depth_index(mut x: i32, mut y: i32, mut z: i32, depth: usize) -> usize {
     let mut idx = 0;
-
-    let mut x = x + width_2;
-    let mut y = y + width_2;
-    let mut z = z + width_2;
 
     for i in 0..depth {
         let bx = x & 1;
@@ -34,8 +28,6 @@ fn depth_index(x: i32, y: i32, z: i32, depth: usize) -> usize {
 }
 
 fn array_index(idx: usize, depth: usize) -> (i32, i32, i32) {
-    let width_2 = 1 << (depth - 1);
-
     let mut x = 0;
     let mut y = 0;
     let mut z = 0;
@@ -54,7 +46,7 @@ fn array_index(idx: usize, depth: usize) -> (i32, i32, i32) {
         y |= by;
         z |= bz;
     }
-    (x - width_2, y - width_2, z - width_2)
+    (x, y, z)
 }
 
 #[cfg(feature = "savedata")]
@@ -71,11 +63,29 @@ pub trait Voxel: PartialEq + Clone + Send + Sync + 'static {
 
 impl Voxel for f32 {
     fn average(data: &[Self]) -> Option<Self> {
-        Some(data.iter().copied().sum::<f32>() / data.len() as f32)
+        if data.is_empty() {
+            None
+        } else {
+            Some(data.iter().copied().sum::<f32>() / data.len() as f32)
+        }
     }
 
     fn can_merge(&self) -> bool {
         false
+    }
+}
+
+impl Voxel for i32 {
+    fn average(data: &[Self]) -> Option<Self> {
+        if data.is_empty() {
+            None
+        } else {
+            Some(data.iter().copied().sum::<i32>() / data.len() as i32)
+        }
+    }
+
+    fn can_merge(&self) -> bool {
+        true
     }
 }
 
@@ -207,12 +217,12 @@ impl<T: Voxel> LodTree<T> {
     }
 
     pub fn insert(&mut self, (x, y, z): (i32, i32, i32), value: T) -> Option<Cow<'_, T>> {
-        if x >= self.width() as i32 / 2
-            || x < self.width() as i32 / -2
-            || y >= self.width() as i32 / 2
-            || y < self.width() as i32 / -2
-            || z >= self.width() as i32 / 2
-            || z < self.width() as i32 / -2
+        if x >= self.width() as i32
+            || x < 0
+            || y >= self.width() as i32
+            || y < 0
+            || z >= self.width() as i32
+            || z < 0
         {
             return None;
         }
@@ -247,12 +257,12 @@ impl<T: Voxel> LodTree<T> {
     }
 
     pub fn remove(&mut self, (x, y, z): (i32, i32, i32)) -> Option<Cow<'_, T>> {
-        if x >= self.width() as i32 / 2
-            || x < self.width() as i32 / -2
-            || y >= self.width() as i32 / 2
-            || y < self.width() as i32 / -2
-            || z >= self.width() as i32 / 2
-            || z < self.width() as i32 / -2
+        if x >= self.width() as i32
+            || x < 0
+            || y >= self.width() as i32
+            || y < 0
+            || z >= self.width() as i32
+            || z < 0
         {
             return None;
         }
@@ -287,12 +297,12 @@ impl<T: Voxel> LodTree<T> {
     }
 
     pub fn get_mut(&mut self, (x, y, z): (i32, i32, i32)) -> Option<&mut T> {
-        if x >= self.width() as i32 / 2
-            || x < self.width() as i32 / -2
-            || y >= self.width() as i32 / 2
-            || y < self.width() as i32 / -2
-            || z >= self.width() as i32 / 2
-            || z < self.width() as i32 / -2
+        if x >= self.width() as i32
+            || x < 0
+            || y >= self.width() as i32
+            || y < 0
+            || z >= self.width() as i32
+            || z < 0
         {
             return None;
         }
@@ -321,6 +331,16 @@ impl<T: Voxel> LodTree<T> {
     }
 
     pub fn get(&self, (x, y, z): (i32, i32, i32)) -> Option<Cow<'_, T>> {
+        if x >= self.width() as i32
+            || x < 0
+            || y >= self.width() as i32
+            || y < 0
+            || z >= self.width() as i32
+            || z < 0
+        {
+            return None;
+        }
+        
         if self.lod == 0 {
             self.get_impl((x, y, z)).map(Cow::Borrowed)
         } else {
@@ -348,15 +368,6 @@ impl<T: Voxel> LodTree<T> {
     }
 
     fn get_impl(&self, (x, y, z): (i32, i32, i32)) -> Option<&T> {
-        if x >= self.width() as i32 / 2
-            || x < self.width() as i32 / -2
-            || y >= self.width() as i32 / 2
-            || y < self.width() as i32 / -2
-            || z >= self.width() as i32 / 2
-            || z < self.width() as i32 / -2
-        {
-            return None;
-        }
         let idx = depth_index(x, y, z, self.depth);
         let mut result_ref = &self.array[idx];
 
@@ -434,10 +445,6 @@ impl<T: Voxel> LodTree<T> {
                                 Node::Value(value, width) => break (i, value, *width),
                             }
                         };
-                        if set.contains(&idx) {
-                            return None;
-                        }
-                        set.insert(idx);
                         let (vx, vy, vz) = array_index(idx, depth);
                         result.x = vx;
                         result.y = vy;
@@ -450,6 +457,11 @@ impl<T: Voxel> LodTree<T> {
                 result.x &= !mask;
                 result.y &= !mask;
                 result.z &= !mask;
+                if set.contains(&(result.x, result.y, result.z, result.width)) {
+                    mem::forget(result.value);
+                    return None;
+                }
+                set.insert((result.x, result.y, result.z, result.width));
                 let avg = T::average(&array);
                 if let Some(value) = avg {
                     let mut value = Cow::Owned(value);
@@ -613,42 +625,27 @@ mod tests {
 
     #[test]
     pub fn insert() {
-        let mut vt = LodTree::<i32>::new(8);
-        vt.insert((-4, -4, -4), -4);
-        vt.insert((-3, -3, -3), -3);
-        vt.insert((-2, -2, -2), -2);
-        vt.insert((-1, -1, -1), -1);
+        let mut vt = LodTree::<i32>::new(4);
         vt.insert((0, 0, 0), 0);
         vt.insert((1, 1, 1), 1);
         vt.insert((2, 2, 2), 2);
         vt.insert((3, 3, 3), 3);
 
-        assert_eq!(vt.position(&-1), Some((-1, -1, -1)));
-        assert_eq!(vt.position(&-2), Some((-2, -2, -2)));
-        assert_eq!(vt.position(&-3), Some((-3, -3, -3)));
-        assert_eq!(vt.position(&-4), Some((-4, -4, -4)));
         assert_eq!(vt.position(&0), Some((0, 0, 0)));
         assert_eq!(vt.position(&1), Some((1, 1, 1)));
         assert_eq!(vt.position(&2), Some((2, 2, 2)));
         assert_eq!(vt.position(&3), Some((3, 3, 3)));
 
-        assert_eq!(vt.get((-1, -1, -1)), Some(&-1));
-        assert_eq!(vt.get((-2, -2, -2)), Some(&-2));
-        assert_eq!(vt.get((-3, -3, -3)), Some(&-3));
-        assert_eq!(vt.get((-4, -4, -4)), Some(&-4));
-        assert_eq!(vt.get((0, 0, 0)), Some(&0));
-        assert_eq!(vt.get((1, 1, 1)), Some(&1));
-        assert_eq!(vt.get((2, 2, 2)), Some(&2));
-        assert_eq!(vt.get((3, 3, 3)), Some(&3));
+        assert_eq!(vt.get((0, 0, 0)).unwrap().into_owned(), 0);
+        assert_eq!(vt.get((1, 1, 1)).unwrap().into_owned(), 1);
+        assert_eq!(vt.get((2, 2, 2)).unwrap().into_owned(), 2);
+        assert_eq!(vt.get((3, 3, 3)).unwrap().into_owned(), 3);
+                   
     }
 
     #[test]
     pub fn remove() {
         let mut vt = LodTree::<i32>::new(8);
-        vt.insert((-4, -4, -4), -4);
-        vt.insert((-3, -3, -3), -3);
-        vt.insert((-2, -2, -2), -2);
-        vt.insert((-1, -1, -1), -1);
         vt.insert((0, 0, 0), 0);
         vt.insert((1, 1, 1), 1);
         vt.insert((2, 2, 2), 2);
@@ -656,87 +653,41 @@ mod tests {
 
         vt.remove((0, 0, 0));
 
-        assert_eq!(vt.position(&-1), Some((-1, -1, -1)));
-        assert_eq!(vt.position(&-2), Some((-2, -2, -2)));
-        assert_eq!(vt.position(&-3), Some((-3, -3, -3)));
-        assert_eq!(vt.position(&-4), Some((-4, -4, -4)));
         assert_eq!(vt.position(&0), None);
         assert_eq!(vt.position(&1), Some((1, 1, 1)));
         assert_eq!(vt.position(&2), Some((2, 2, 2)));
         assert_eq!(vt.position(&3), Some((3, 3, 3)));
 
-        assert_eq!(vt.get((-1, -1, -1)), Some(&-1));
-        assert_eq!(vt.get((-2, -2, -2)), Some(&-2));
-        assert_eq!(vt.get((-3, -3, -3)), Some(&-3));
-        assert_eq!(vt.get((-4, -4, -4)), Some(&-4));
         assert_eq!(vt.get((0, 0, 0)), None);
-        assert_eq!(vt.get((1, 1, 1)), Some(&1));
-        assert_eq!(vt.get((2, 2, 2)), Some(&2));
-        assert_eq!(vt.get((3, 3, 3)), Some(&3));
+        assert_eq!(vt.get((1, 1, 1)).unwrap().into_owned(), 1);
+        assert_eq!(vt.get((2, 2, 2)).unwrap().into_owned(), 2);
+        assert_eq!(vt.get((3, 3, 3)).unwrap().into_owned(), 3);
     }
 
     #[test]
     fn elements() {
         let mut vt = LodTree::<i32>::new(4);
-        vt.insert((-2, -2, -2), -2);
-        vt.insert((-1, -1, -1), -1);
-        vt.insert((0, 0, 0), 2);
-
-        assert!(vt
-            .elements()
-            .map(|elem| ((elem.x, elem.y, elem.z), *elem.value, elem.width))
-            .all(|elem| {
-                [
-                    ((-2, -2, -2), -2, 1),
-                    ((-1, -1, -1), -1, 1),
-                    ((0, 0, 0), 2, 1),
-                ]
-                .contains(&elem)
-            }));
-    }
-
-    #[test]
-    fn diagonal() {
-        let mut vt = LodTree::<i32>::new(4);
-        vt.insert((-2, -2, -2), -2);
-        vt.insert((-1, -1, -1), -1);
         vt.insert((0, 0, 0), 0);
-        vt.insert((1, 1, 1), 1);
+        vt.insert((0, 0, 1), 1);
+        vt.insert((2, 0, 0), 2);
 
+        assert_eq!(vt.elements().count(), 3);
         assert!(vt
             .elements()
             .map(|elem| ((elem.x, elem.y, elem.z), *elem.value, elem.width))
             .all(|elem| {
                 [
-                    ((-2, -2, -2), -2, 1),
-                    ((-1, -1, -1), -1, 1),
                     ((0, 0, 0), 0, 1),
-                    ((1, 1, 1), 1, 1),
+                    ((0, 0, 1), 1, 1),
+                    ((2, 0, 0), 2, 1),
                 ]
                 .contains(&elem)
             }));
-    }
-
-    #[test]
-    pub fn small() {
-        let mut vt = LodTree::<i32>::new(4);
-        vt.insert((-1, -1, -1), 0);
-        vt.insert((-1, -1, -2), 0);
-        vt.insert((-1, -2, -1), 0);
-        vt.insert((-1, -2, -2), 0);
-        vt.insert((-2, -1, -1), 0);
-        vt.insert((-2, -1, -2), 0);
-        vt.insert((-2, -2, -1), 0);
-        vt.insert((-2, -2, -2), 0);
-
-        vt.merge();
-
-        println!("{:?}", vt);
     }
 
     #[test]
     pub fn merge() {
-        let mut vt = LodTree::<i32>::new(8);
+        let mut vt = LodTree::<i32>::new(4);
         vt.insert((2, 2, 2), 0);
         vt.insert((2, 2, 3), 0);
         vt.insert((2, 3, 2), 0);
@@ -747,26 +698,28 @@ mod tests {
         vt.insert((3, 3, 3), 0);
 
         vt.merge();
+        
+        assert_eq!(vt.elements().count(), 1);
 
         assert_eq!(vt.position(&0), Some((2, 2, 2)));
 
-        assert_eq!(vt.get((2, 2, 2)), Some(&0));
-        assert_eq!(vt.get((2, 2, 3)), Some(&0));
-        assert_eq!(vt.get((2, 3, 2)), Some(&0));
-        assert_eq!(vt.get((2, 3, 3)), Some(&0));
-        assert_eq!(vt.get((3, 2, 2)), Some(&0));
-        assert_eq!(vt.get((3, 2, 3)), Some(&0));
-        assert_eq!(vt.get((3, 3, 2)), Some(&0));
-        assert_eq!(vt.get((3, 3, 3)), Some(&0));
+        assert_eq!(vt.get((2, 2, 2)).unwrap().into_owned(), 0);
+        assert_eq!(vt.get((2, 2, 3)).unwrap().into_owned(), 0);
+        assert_eq!(vt.get((2, 3, 2)).unwrap().into_owned(), 0);
+        assert_eq!(vt.get((2, 3, 3)).unwrap().into_owned(), 0);
+        assert_eq!(vt.get((3, 2, 2)).unwrap().into_owned(), 0);
+        assert_eq!(vt.get((3, 2, 3)).unwrap().into_owned(), 0);
+        assert_eq!(vt.get((3, 3, 2)).unwrap().into_owned(), 0);
+        assert_eq!(vt.get((3, 3, 3)).unwrap().into_owned(), 0);
 
-        let a = vt.get((2, 2, 2)).unwrap() as *const _;
-        let b = vt.get((2, 2, 3)).unwrap() as *const _;
-        let c = vt.get((2, 3, 2)).unwrap() as *const _;
-        let d = vt.get((2, 3, 3)).unwrap() as *const _;
-        let e = vt.get((3, 2, 2)).unwrap() as *const _;
-        let f = vt.get((3, 2, 3)).unwrap() as *const _;
-        let g = vt.get((3, 3, 2)).unwrap() as *const _;
-        let h = vt.get((3, 3, 3)).unwrap() as *const _;
+        let a = &*vt.get((2, 2, 2)).unwrap() as *const _;
+        let b = &*vt.get((2, 2, 3)).unwrap() as *const _;
+        let c = &*vt.get((2, 3, 2)).unwrap() as *const _;
+        let d = &*vt.get((2, 3, 3)).unwrap() as *const _;
+        let e = &*vt.get((3, 2, 2)).unwrap() as *const _;
+        let f = &*vt.get((3, 2, 3)).unwrap() as *const _;
+        let g = &*vt.get((3, 3, 2)).unwrap() as *const _;
+        let h = &*vt.get((3, 3, 3)).unwrap() as *const _;
 
         assert_eq!(a, b);
         assert_eq!(a, c);

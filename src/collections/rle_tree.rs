@@ -1,6 +1,8 @@
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
+use int_traits::IntTraits;
+
 use crate::collections::lod_tree::{LodTree, Voxel};
 use crate::serialize::SerDePartialEq;
 
@@ -21,13 +23,12 @@ impl<T: Voxel> RleTree<T> {
     pub fn with_tree(tree: &LodTree<T>) -> Self {
         let mut array = Vec::<Node<T>>::new();
         for elem in tree.opt_elements() {
-            // TODO: fix this
-            // if let Some(last) = array.last_mut() {
-            //     if last.value.serde_eq(&elem.value) {
-            //         last.len += elem.width.pow(3);
-            //         continue;
-            //     }
-            // }
+            if let Some(last) = array.last_mut() {
+                if elem.width <= last.len.cbrt() && last.value.serde_eq(&elem.value) {
+                    last.len += elem.width.pow(3);
+                    continue;
+                }
+            }
             array.push(Node { value: elem.value.clone(), len: elem.width.pow(3) });
         }
         Self { array }

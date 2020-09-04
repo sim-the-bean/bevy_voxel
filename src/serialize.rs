@@ -8,6 +8,12 @@ impl SerDePartialEq<Self> for f32 {
     }
 }
 
+impl SerDePartialEq<Self> for i32 {
+    fn serde_eq(&self, other: &Self) -> bool {
+        self == other
+    }
+}
+
 impl<T, U: SerDePartialEq<T>> SerDePartialEq<Option<T>> for Option<U> {
     fn serde_eq(&self, other: &Option<T>) -> bool {
         self.as_ref()

@@ -80,10 +80,10 @@ pub fn terrain_generation<T: Voxel>(
 ) {
     let max_count = 1;
     let mut count = 0;
-    for (mut map, mut update) in &mut query.iter() {
+    for (mut map, mut map_update) in &mut query.iter() {
         let mut remove = Vec::new();
         let mut insert = Vec::new();
-        for (&(x, y, z, w), update) in &update.updates {
+        for (&(x, y, z), update) in &map_update.updates {
             match update {
                 ChunkUpdate::GenerateChunk => {}
                 _ => continue,
@@ -92,27 +92,36 @@ pub fn terrain_generation<T: Voxel>(
                 break;
             }
             count += 1;
-            remove.push((x, y, z, w));
+            remove.push((x, y, z));
             let chunk = params.generate((x, y, z));
+            let width = chunk.width() as i32;
             map.insert(chunk);
             let range = 1;
             for lx in -range..=range {
                 for ly in -range..=range {
                     for lz in -range..=range {
-                        let x = x + lx;
-                        let y = y + ly;
-                        let z = z + lz;
-                        insert.push(((x, y, z, w), ChunkUpdate::UpdateLightMap));
+                        let x = x + lx * width;
+                        let y = y + ly * width;
+                        let z = z + lz * width;
+                        if lx != 0 && ly != 0 && lz != 0 {
+                            if let Some(u) = map_update.updates.get(&(x, y, z)) {
+                                if u > &ChunkUpdate::UpdateLightMap {
+                                    insert.push(((x, y, z), ChunkUpdate::UpdateLightMap));
+                                }
+                                continue;
+                            }
+                        }
+                        insert.push(((x, y, z), ChunkUpdate::UpdateLightMap));
                     }
                 }
             }
         }
         for coords in remove {
-            update.updates.remove(&coords);
+            map_update.updates.remove(&coords);
         }
         for (coords, u) in insert {
-            if !update.updates.contains_key(&coords) {
-                update.updates.insert(coords, u);
+            if !map_update.updates.contains_key(&coords) {
+                map_update.updates.insert(coords, u);
             }
         }
     }
@@ -124,15 +133,15 @@ fn terrain_gen2_impl<T: Voxel, N: NoiseFn<[f64; 2]> + Seedable + Default>(
 ) -> Chunk<T> {
     let noise = N::default().set_seed(params.seed);
     let mut chunk = Chunk::new(params.chunk_size, (cx, cy, cz));
+    let unit_width = params.unit_width() as i32;
 
     let size = params.chunk_width() as i32;
-    let size_2 = size / 2;
-    let by = cy * size - size_2;
-    for x in -size_2..size_2 {
-        let ax = cx * size + x;
+    let by = cy / unit_width;
+    for x in 0..size {
+        let ax = cx + x * unit_width;
         let fx = ax as f64;
-        for z in -size_2..size_2 {
-            let az = cz * size + z;
+        for z in 0..size {
+            let az = cz + z * unit_width;
             let fz = az as f64;
             let mut height = 0.0;
             for octave in &params.octaves {
@@ -144,10 +153,10 @@ fn terrain_gen2_impl<T: Voxel, N: NoiseFn<[f64; 2]> + Seedable + Default>(
                 let layer_height = layer.height as i32;
                 for _ in 0..layer_height {
                     y -= 1;
-                    if y >= size_2 {
+                    if y >= size {
                         continue;
                     }
-                    if y < -size_2 {
+                    if y < 0 {
                         break;
                     }
                     let x = x << params.granularity;
@@ -176,15 +185,14 @@ fn terrain_gen3_impl<T: Voxel, N: NoiseFn<[f64; 3]> + Seedable + Default>(
     let mut chunk = Chunk::new(params.chunk_size, (cx, cy, cz));
 
     let size = params.chunk_width() as i32;
-    let size_2 = size / 2;
-    for x in -size_2..size_2 {
-        let ax = cx * size + x;
+    for x in 0..size {
+        let ax = cx + x;
         let fx = ax as f64;
-        for y in -size_2..size_2 {
-            let ay = cy * size + y;
+        for y in 0..size {
+            let ay = cy + y;
             let fy = ay as f64;
-            for z in -size_2..size_2 {
-                let az = cz * size + z;
+            for z in 0..size {
+                let az = cz + z;
                 let fz = az as f64;
                 let mut height = 0.0;
                 for octave in &params.octaves {

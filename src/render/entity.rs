@@ -41,7 +41,6 @@ pub trait VoxelExt: Voxel {
         map: &Map<Self>,
         chunk: &Chunk<Self>,
         width: usize,
-        offset: (f32, f32, f32),
     ) -> MeshPart;
 
     fn set_shade(&mut self, _face: Face, _light: f32) {}
@@ -104,19 +103,12 @@ pub fn generate_chunk_mesh<T: VoxelExt>(map: &Map<T>, chunk: &Chunk<T>) -> Optio
     let mut indices = Vec::new();
     let mut n = 0;
 
-    let coords = chunk.position();
-    let chunk_width = chunk.width() as f32;
-    let cx = coords.0 as f32 * chunk_width;
-    let cy = coords.1 as f32 * chunk_width;
-    let cz = coords.2 as f32 * chunk_width;
-
     for elem in chunk.iter() {
         let mut mesh = elem.value.mesh(
             (elem.x, elem.y, elem.z),
             map,
             chunk,
             elem.width,
-            (cx, cy, cz),
         );
 
         let count = mesh.positions.len();

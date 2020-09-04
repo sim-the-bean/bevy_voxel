@@ -873,32 +873,6 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "serde")]
-    fn serde() {
-        let mut vt = VolumetricTree::<i32>::new(8);
-        vt.insert((-4, -4, -4), -4);
-        vt.insert((-3, -3, -3), -3);
-        vt.insert((-2, -2, -2), -2);
-        vt.insert((-1, -1, -1), -1);
-        vt.insert((0, 0, 0), 0);
-        vt.insert((1, 1, 1), 1);
-        vt.insert((2, 2, 2), 2);
-        vt.insert((2, 2, 3), 2);
-        vt.insert((2, 3, 2), 2);
-        vt.insert((2, 3, 3), 2);
-        vt.insert((3, 2, 2), 2);
-        vt.insert((3, 2, 3), 2);
-        vt.insert((3, 3, 2), 2);
-        vt.insert((3, 3, 3), 2);
-
-        let serialized = serde_json::to_string(&vt).unwrap();
-
-        let deserialized: VolumetricTree<i32> = serde_json::from_str(&serialized).unwrap();
-
-        assert_eq!(vt, deserialized);
-    }
-
-    #[test]
     fn elements() {
         let mut vt = VolumetricTree::<i32>::new(4);
         vt.insert((-2, -2, -2), -2);

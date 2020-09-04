@@ -21,25 +21,23 @@ use crate::collections::{
     LodTree,
 };
 
-pub type ChunkKey = (i32, i32, i32);
-
 #[cfg(feature = "savedata")]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SaveData<T> {
-    position: ChunkKey,
+    position: (i32, i32, i32),
     data: RleTree<T>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Chunk<T> {
-    position: ChunkKey,
+    position: (i32, i32, i32),
     data: LodTree<T>,
     light: LodTree<f32>,
     has_light: bool,
 }
 
 impl<T: Voxel> Chunk<T> {
-    pub fn new(size: u32, position: ChunkKey) -> Self {
+    pub fn new(size: u32, position: (i32, i32, i32)) -> Self {
         let chunk_size = 1 << size;
         let data = LodTree::new(chunk_size);
         let light = LodTree::new(chunk_size);
@@ -159,13 +157,12 @@ impl<T: Voxel> RTreeObject for Chunk<T> {
 
     fn envelope(&self) -> Self::Envelope {
         let w = self.width() as i32;
-        let w_2 = w / 2;
-        let x0 = self.position.0 * w - w_2;
-        let y0 = self.position.1 * w - w_2;
-        let z0 = self.position.2 * w - w_2;
-        let x1 = self.position.0 * w + w_2 - 1;
-        let y1 = self.position.1 * w + w_2 - 1;
-        let z1 = self.position.2 * w + w_2 - 1;
+        let x0 = self.position.0;
+        let y0 = self.position.1;
+        let z0 = self.position.2;
+        let x1 = self.position.0 + w - 1;
+        let y1 = self.position.1 + w - 1;
+        let z1 = self.position.2 + w - 1;
         AABB::from_corners([x0, y0, z0], [x1, y1, z1])
     }
 }
@@ -202,10 +199,7 @@ impl<T: Voxel> Map<T> {
     }
 
     pub fn insert(&mut self, value: Chunk<T>) {
-        let w = value.width() as i32;
-        let x = value.position.0 * w;
-        let y = value.position.1 * w;
-        let z = value.position.2 * w;
+        let (x, y, z) = value.position;
         self.map.remove_at_point(&[x, y, z]);
         self.map.insert(value);
     }
@@ -254,17 +248,17 @@ impl<T: Voxel + Serialize + DeserializeOwned> Map<T> {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ChunkUpdate {
-    UpdateMesh,
-    UpdateLight,
-    UpdateLightMap,
     GenerateChunk,
+    UpdateLightMap,
+    UpdateLight,
+    UpdateMesh,
 }
 
 #[derive(Default, Debug, Clone)]
 pub struct MapUpdates {
-    pub updates: HashMap<(i32, i32, i32, usize), ChunkUpdate>,
+    pub updates: HashMap<(i32, i32, i32), ChunkUpdate>,
 }
 
 #[derive(Default, Bundle)]
