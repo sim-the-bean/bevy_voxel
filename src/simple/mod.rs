@@ -50,66 +50,29 @@ impl Default for Shade {
 }
 
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MeshType {
+    Cube,
+    Cross,
+}
+
+impl Default for MeshType {
+    fn default() -> Self {
+        Self::Cube
+    }
+}
+
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Default, Debug, Clone, Copy, PartialEq)]
 pub struct Block {
     #[cfg_attr(feature = "serde", serde(skip))]
     pub shade: Shade,
     pub color: Color,
+    pub mesh_type: MeshType
 }
 
-#[cfg(feature = "savedata")]
-impl SerDePartialEq<Self> for Block {
-    fn serde_eq(&self, other: &Self) -> bool {
-        self.color == other.color
-    }
-}
-
-impl Voxel for Block {
-    fn average(data: &[Self]) -> Option<Self> {
-        if data.is_empty() {
-            return None;
-        }
-
-        let mut color = Color::rgba(0.0, 0.0, 0.0, 0.0);
-        let mut top = 0.0_f32;
-        let mut bottom = 0.0_f32;
-        let mut left = 0.0_f32;
-        let mut right = 0.0_f32;
-        let mut front = 0.0_f32;
-        let mut back = 0.0_f32;
-
-        for block in data {
-            top = top.max(block.shade.top);
-            bottom = bottom.max(block.shade.bottom);
-            left = left.max(block.shade.left);
-            right = right.max(block.shade.right);
-            front = front.max(block.shade.front);
-            back = back.max(block.shade.back);
-            color += block.color;
-        }
-
-        color *= (data.len() as f32).recip();
-
-        Some(Self {
-            color,
-            shade: Shade {
-                top,
-                bottom,
-                left,
-                right,
-                front,
-                back,
-            },
-        })
-    }
-
-    fn can_merge(&self) -> bool {
-        true
-    }
-}
-
-impl VoxelExt for Block {
-    fn mesh(
+impl Block {
+    fn mesh_cube(
         &self,
         coords: (i32, i32, i32),
         map: &Map<Self>,
@@ -211,6 +174,131 @@ impl VoxelExt for Block {
             shades,
             colors,
             indices,
+        }
+    }
+
+    fn mesh_cross(
+        &self,
+        coords: (i32, i32, i32),
+        _map: &Map<Self>,
+        _chunk: &Chunk<Self>,
+        width: usize,
+    ) -> MeshPart {
+        let x = coords.0 as f32;
+        let y = coords.1 as f32;
+        let z = coords.2 as f32;
+        let size = width as f32;
+
+        let positions = vec![
+            [x, y, z + size],
+            [x, y + size, z + size],
+            [x + size, y + size, z],
+            [x + size, y + size, z],
+            [x, y + size, z],
+            [x, y, z],
+            [x + size, y, z + size],
+            [x + size, y + size, z + size],
+        ];
+        let shades = vec![
+            self.shade.top,
+            self.shade.top,
+            self.shade.top,
+            self.shade.top,
+            self.shade.top,
+            self.shade.top,
+            self.shade.top,
+            self.shade.top,
+        ];
+        let colors = vec![
+            self.color.into(),
+            self.color.into(),
+            self.color.into(),
+            self.color.into(),
+            self.color.into(),
+            self.color.into(),
+            self.color.into(),
+            self.color.into(),
+        ];
+
+        let indices = vec![
+            0, 1, 2, 2, 3, 0,
+            4, 5, 6, 6, 7, 4,
+        ];
+        
+        MeshPart {
+            positions,
+            shades,
+            colors,
+            indices,
+        }
+    }
+}
+
+#[cfg(feature = "savedata")]
+impl SerDePartialEq<Self> for Block {
+    fn serde_eq(&self, other: &Self) -> bool {
+        self.color == other.color
+    }
+}
+
+impl Voxel for Block {
+    fn average(data: &[Self]) -> Option<Self> {
+        if data.is_empty() {
+            return None;
+        } else if data.len() == 1 {
+            return Some(data[0].clone());
+        };
+
+        let mut color = Color::rgba(0.0, 0.0, 0.0, 0.0);
+        let mut top = 0.0_f32;
+        let mut bottom = 0.0_f32;
+        let mut left = 0.0_f32;
+        let mut right = 0.0_f32;
+        let mut front = 0.0_f32;
+        let mut back = 0.0_f32;
+
+        for block in data {
+            top = top.max(block.shade.top);
+            bottom = bottom.max(block.shade.bottom);
+            left = left.max(block.shade.left);
+            right = right.max(block.shade.right);
+            front = front.max(block.shade.front);
+            back = back.max(block.shade.back);
+            color += block.color;
+        }
+
+        color *= (data.len() as f32).recip();
+
+        Some(Self {
+            color,
+            shade: Shade {
+                top,
+                bottom,
+                left,
+                right,
+                front,
+                back,
+            },
+            mesh_type: MeshType::Cube,
+        })
+    }
+
+    fn can_merge(&self) -> bool {
+        self.mesh_type == MeshType::Cube
+    }
+}
+
+impl VoxelExt for Block {
+    fn mesh(
+        &self,
+        coords: (i32, i32, i32),
+        map: &Map<Self>,
+        chunk: &Chunk<Self>,
+        width: usize,
+    ) -> MeshPart {
+        match self.mesh_type {
+            MeshType::Cube => self.mesh_cube(coords, map, chunk, width),
+            MeshType::Cross => self.mesh_cross(coords, map, chunk, width),
         }
     }
 

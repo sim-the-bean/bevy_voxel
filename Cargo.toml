@@ -10,11 +10,12 @@ repository = "https://github.com/walterpie/bevy_voxel"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-rand = "0.7"
+rand = { version = "0.7", features = ["small_rng"] }
 line_drawing = "0.8"
 noise = "0.6"
 int_traits = "0.1"
 rstar = "0.8"
+either = "1.6"
 
 [dependencies.bevy]
 path = "../bevy"

@@ -195,7 +195,7 @@ impl<T: Voxel> LodTree<T> {
                             Node::Value(value, width) => break (value, width),
                         }
                     };
-                    if elem == pivot && width == pivot_width {
+                    if elem.as_ref().map(|v| v.can_merge()).unwrap_or(true) && elem == pivot && width == pivot_width {
                         merges.entry(pivot_idx).or_default().push(i);
                     }
                 }

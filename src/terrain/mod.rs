@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 
 use noise::{NoiseFn, OpenSimplex, Perlin, Seedable, SuperSimplex};
-
+use rand::SeedableRng;
 use rstar::{PointDistance, RTree, RTreeObject, AABB};
 
 use crate::{
@@ -9,62 +9,9 @@ use crate::{
     world::{Chunk, ChunkUpdate, Map, MapUpdates},
 };
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum NoiseType {
-    Perlin,
-    OpenSimplex,
-    SuperSimplex,
-}
+pub mod dsl;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum NoiseDimensions {
-    Two,
-    Three,
-}
-
-impl Default for NoiseType {
-    fn default() -> Self {
-        Self::SuperSimplex
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Octave {
-    pub amplitude: f64,
-    pub frequency: f64,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Layer<T: Voxel> {
-    pub block: T,
-    pub height: f64,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Filter {
-    NearestNeighbour,
-    Bilinear(i32),
-}
-
-impl Filter {
-    pub fn aux_width(&self) -> i32 {
-        match self {
-            Filter::NearestNeighbour => 0,
-            Filter::Bilinear(_) => 1,
-        }
-    }
-    
-    pub fn as_i32(&self) -> i32 {
-        match self {
-            Filter::NearestNeighbour => 1,
-            Filter::Bilinear(width) => *width,
-        }
-    }
-    
-    pub fn as_usize(&self) -> usize {
-        self.as_i32() as _
-    }
-}
+pub use dsl::*;
 
 #[derive(Debug, Clone)]
 pub struct HeightChunk {
@@ -83,7 +30,6 @@ impl HeightChunk {
         match self.filter {
             Filter::NearestNeighbour => self.array[(x * self.width as i32 + z) as usize],
             Filter::Bilinear(width) => {
-                debug_assert!((width as u32).is_power_of_two());
                 let bx = x % width;
                 let bz = z % width;
                 let x = x / width;
@@ -171,19 +117,7 @@ impl HeightMap {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct TerrainGenParameters<T: Voxel> {
-    pub seed: u32,
-    pub noise_type: NoiseType,
-    pub dimensions: NoiseDimensions,
-    pub chunk_size: u32,
-    pub granularity: u32,
-    pub filter: Filter,
-    pub octaves: Vec<Octave>,
-    pub layers: Vec<Layer<T>>,
-}
-
-impl<T: Voxel> TerrainGenParameters<T> {
+impl<T: Voxel> Program<T> {
     pub fn height_chunk<N: NoiseFn<[f64; 2]> + Seedable + Default>(&self, (cx, cz): (i32, i32)) -> HeightChunk {
         let a = self.filter.aux_width();
         let mut chunk = Vec::with_capacity((self.chunk_width() / self.filter.as_usize() + a as usize).pow(2));
@@ -192,14 +126,38 @@ impl<T: Voxel> TerrainGenParameters<T> {
         let unit_width = self.unit_width() as i32;
 
         let size = self.chunk_width() as i32 / self.filter.as_i32();
+        
+        let mut biome_map = Vec::with_capacity(chunk.capacity());
+        
         for x in 0..size + a {
             let ax = cx + x * unit_width * self.filter.as_i32();
             let fx = ax as f64;
             for z in 0..size + a {
                 let az = cz + z * unit_width * self.filter.as_i32();
                 let fz = az as f64;
+                let height = noise.get([fx * self.biome_frequency, fz * self.biome_frequency]) * 0.5 + 0.5;
+                let mut idx = 0_usize;
+                // FIXME
+                for (i, biome) in self.biomes.iter().enumerate() {
+                    if height < biome.prob {
+                        idx = i;
+                        break;
+                    }
+                }
+                biome_map.push(idx);
+            }
+        }
+        
+        for x in 0..size + a {
+            let ax = cx + x * unit_width * self.filter.as_i32();
+            let fx = ax as f64;
+            for z in 0..size + a {
+                let az = cz + z * unit_width * self.filter.as_i32();
+                let fz = az as f64;
+                let biome = biome_map[(x * (size + a) + z) as usize];
+                let biome = &self.biomes[biome];
                 let mut height = 0.0;
-                for octave in &self.octaves {
+                for octave in &biome.octaves {
                     height +=
                         noise.get([fx * octave.frequency, fz * octave.frequency]) * octave.amplitude;
                 }
@@ -211,14 +169,14 @@ impl<T: Voxel> TerrainGenParameters<T> {
     }
     
     pub fn chunk_width(&self) -> usize {
-        2_usize.pow(self.chunk_size - self.granularity)
+        2_usize.pow(self.chunk_size - self.subdivisions)
     }
 
     pub fn unit_width(&self) -> usize {
-        2_usize.pow(self.granularity)
+        2_usize.pow(self.subdivisions)
     }
 
-    pub fn generate(&self, height_map: &mut HeightMap, coords: (i32, i32, i32)) -> Chunk<T> {
+    pub fn execute(&self, height_map: &mut HeightMap, coords: (i32, i32, i32)) -> Chunk<T> {
         match self.dimensions {
             NoiseDimensions::Two => match self.noise_type {
                 NoiseType::Perlin => terrain_gen2_impl::<_, Perlin>(self, height_map, coords),
@@ -235,7 +193,7 @@ impl<T: Voxel> TerrainGenParameters<T> {
 }
 
 pub fn terrain_generation<T: Voxel>(
-    params: Res<TerrainGenParameters<T>>,
+    params: Res<Program<T>>,
     mut height_map: ResMut<HeightMap>,
     mut query: Query<(&mut Map<T>, &mut MapUpdates)>,
 ) {
@@ -254,7 +212,7 @@ pub fn terrain_generation<T: Voxel>(
             }
             count += 1;
             remove.push((x, y, z));
-            let chunk = params.generate(&mut height_map, (x, y, z));
+            let chunk = params.execute(&mut height_map, (x, y, z));
             let width = chunk.width() as i32;
             map.insert(chunk);
             let range = 1;
@@ -289,7 +247,7 @@ pub fn terrain_generation<T: Voxel>(
 }
 
 fn terrain_gen2_impl<T: Voxel, N: NoiseFn<[f64; 2]> + Seedable + Default>(
-    params: &TerrainGenParameters<T>,
+    params: &Program<T>,
     height_map: &mut HeightMap,
     (cx, cy, cz): (i32, i32, i32),
 ) -> Chunk<T> {
@@ -301,12 +259,37 @@ fn terrain_gen2_impl<T: Voxel, N: NoiseFn<[f64; 2]> + Seedable + Default>(
     let unit_width = params.unit_width() as i32;
 
     let size = params.chunk_width() as i32;
+        
+    let noise = N::default().set_seed(params.seed);
+    let mut biome_map = Vec::with_capacity(params.chunk_size.pow(2) as usize);
+    
+    for x in 0..size {
+        let ax = cx + x * unit_width * params.filter.as_i32();
+        let fx = ax as f64;
+        for z in 0..size {
+            let az = cz + z * unit_width * params.filter.as_i32();
+            let fz = az as f64;
+            let height = noise.get([fx * params.biome_frequency, fz * params.biome_frequency]) * 0.5 + 0.5;
+            let mut idx = 0_usize;
+            // FIXME
+            for (i, biome) in params.biomes.iter().enumerate() {
+                if height < biome.prob {
+                    idx = i;
+                    break;
+                }
+            }
+            biome_map.push(idx);
+        }
+    }
+    
     let by = cy / unit_width;
     for x in 0..size {
         for z in 0..size {
+            let biome = biome_map[(x * size + z) as usize];
+            let biome = &params.biomes[biome];
             let height = height_chunk.get((x, z)) as f64;
             let mut y = height as i32 - by;
-            for layer in params.layers.iter().rev() {
+            for layer in biome.layers.iter().rev() {
                 let layer_height = layer.height as i32;
                 for _ in 0..layer_height {
                     y -= 1;
@@ -316,9 +299,9 @@ fn terrain_gen2_impl<T: Voxel, N: NoiseFn<[f64; 2]> + Seedable + Default>(
                     if y < 0 {
                         break;
                     }
-                    let x = x << params.granularity;
-                    let y = y << params.granularity;
-                    let z = z << params.granularity;
+                    let x = x << params.subdivisions;
+                    let y = y << params.subdivisions;
+                    let z = z << params.subdivisions;
                     for ix in 0..params.unit_width() as i32 {
                         for iy in 0..params.unit_width() as i32 {
                             for iz in 0..params.unit_width() as i32 {
@@ -331,60 +314,44 @@ fn terrain_gen2_impl<T: Voxel, N: NoiseFn<[f64; 2]> + Seedable + Default>(
         }
     }
 
+    let mut rng = rand::rngs::SmallRng::seed_from_u64((cx as u64) << 32 | cz as u64);
+    
+    for x in 0..size {
+        for z in 0..size {
+            let biome = biome_map[(x * size + z) as usize];
+            let biome = &params.biomes[biome];
+            let x = x << params.subdivisions;
+            let z = z << params.subdivisions;
+            for stmt in &biome.per_xz {
+                let result = stmt.execute(&mut rng, Some((x, z)), &chunk);
+                if let Some(diff) = result.block {
+                    for ux in 0..diff.size.0 {
+                        for uy in 0..diff.size.1 {
+                            for uz in 0..diff.size.2 {
+                                for ix in 0..params.unit_width() as i32 {
+                                    for iy in 0..params.unit_width() as i32 {
+                                        for iz in 0..params.unit_width() as i32 {
+                                            let x = diff.at.0 + ux as i32 + ix;
+                                            let y = diff.at.1 + uy as i32 + iy;
+                                            let z = diff.at.2 + uz as i32 + iz;
+                                            chunk.insert((x, y, z), diff.data[ux * diff.size.1 * diff.size.2 + uy * diff.size.2 + uz].clone());
+                                        }
+                                    }
+                                }
+                           }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
     chunk
 }
 
 fn terrain_gen3_impl<T: Voxel, N: NoiseFn<[f64; 3]> + Seedable + Default>(
-    params: &TerrainGenParameters<T>,
-    (cx, cy, cz): (i32, i32, i32),
+    _params: &Program<T>,
+    (_cx, _cy, _cz): (i32, i32, i32),
 ) -> Chunk<T> {
-    let noise = N::default().set_seed(params.seed);
-    let mut chunk = Chunk::new(params.chunk_size, (cx, cy, cz));
-
-    let size = params.chunk_width() as i32;
-    for x in 0..size {
-        let ax = cx + x;
-        let fx = ax as f64;
-        for y in 0..size {
-            let ay = cy + y;
-            let fy = ay as f64;
-            for z in 0..size {
-                let az = cz + z;
-                let fz = az as f64;
-                let mut height = 0.0;
-                for octave in &params.octaves {
-                    height += noise.get([
-                        fx * octave.frequency,
-                        fy * octave.frequency,
-                        fz * octave.frequency,
-                    ]) * octave.amplitude;
-                }
-
-                let mut h = height;
-                let mut idx = None;
-                for (i, layer) in params.layers.iter().enumerate() {
-                    if h < layer.height {
-                        idx = Some(i);
-                        break;
-                    }
-                    h -= layer.height;
-                }
-                if let Some(idx) = idx {
-                    let layer = &params.layers[idx];
-                    let x = x << params.granularity;
-                    let y = y << params.granularity;
-                    let z = z << params.granularity;
-                    for ix in 0..params.unit_width() as i32 {
-                        for iy in 0..params.unit_width() as i32 {
-                            for iz in 0..params.unit_width() as i32 {
-                                chunk.insert((x + ix, y + iy, z + iz), layer.block.clone());
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    chunk
+    todo!()
 }
