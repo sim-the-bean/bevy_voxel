@@ -24,8 +24,8 @@ use bevy_voxel::{
 };
 
 pub const CHUNK_SIZE: u32 = 5;
-pub const WORLD_WIDTH: i32 = 128;
-pub const WORLD_HEIGHT: i32 = 64;
+pub const WORLD_WIDTH: i32 = 512;
+pub const WORLD_HEIGHT: i32 = 96;
 
 pub fn main() {
     let params = Program::build()
@@ -150,6 +150,51 @@ pub fn main() {
                 )
                 .build()
         )
+        .biome(
+            Biome::build()
+                .name("hills")
+                .spawn_probability(0.3)
+                .octave(Octave::new(24.0, 0.01))
+                .octave(Octave::new(2.0, 0.05))
+                .octave(Octave::new(1.0, 0.10))
+                .layer(
+                    Layer::new(
+                        Block {
+                            color: Color::rgb(0.08, 0.08, 0.08),
+                            ..Default::default()
+                        },
+                        f64::INFINITY,
+                    )
+                )
+                .layer(
+                    Layer::new(
+                        Block {
+                            color: Color::rgb(0.5, 0.5, 0.5),
+                            ..Default::default()
+                        },
+                        16.0,
+                    )
+                )
+                .layer(
+                    Layer::new(
+                        Block {
+                            color: Color::rgb(0.396, 0.263, 0.129),
+                            ..Default::default()
+                        },
+                        3.0,
+                    )
+                )
+                .layer(
+                    Layer::new(
+                        Block {
+                            color: Color::rgb(0.0, 0.416, 0.306),
+                            ..Default::default()
+                        },
+                        1.0,
+                    )
+                )
+                .build()
+        )
         .build();
     App::build()
         .add_default_plugins()
@@ -241,9 +286,10 @@ fn chunk_update<T: VoxelExt>(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<VoxelMaterial>>,
-    mut query: Query<(&Map<T>, &mut MapUpdates)>,
+    mut maps: Query<(&mut Map<T>, &mut MapUpdates)>,
+    chunks: Query<&Handle<Mesh>>,
 ) {
-    for (map, mut update) in &mut query.iter() {
+    for (mut map, mut update) in &mut maps.iter() {
         let mut remove = Vec::new();
         for (&(x, y, z), update) in &update.updates {
             match update {
@@ -255,15 +301,21 @@ fn chunk_update<T: VoxelExt>(
             let chunk = map.get((x, y, z)).unwrap();
 
             let mesh = generate_chunk_mesh(&map, &chunk);
+            
             if let Some(mesh) = mesh {
-                commands.spawn(ChunkRenderComponents {
-                    mesh: meshes.add(mesh),
-                    material: materials.add(VoxelMaterial {
-                        albedo: Color::WHITE,
-                    }),
-                    translation: Translation::new(x as f32, y as f32, z as f32),
-                    ..Default::default()
-                });
+                let chunk = map.get_mut((x, y, z)).unwrap();
+                if let Some(e) = chunk.entity() {
+                    *meshes.get_mut(&chunks.get(e).unwrap()).unwrap() = mesh;
+                } else {
+                    commands.spawn(ChunkRenderComponents {
+                        mesh: meshes.add(mesh),
+                        material: materials.add(VoxelMaterial {
+                            albedo: Color::WHITE,
+                        }),
+                        translation: Translation::new(x as f32, y as f32, z as f32),
+                        ..Default::default()
+                    });
+                }
             }
         }
         for coords in remove {

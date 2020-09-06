@@ -11,6 +11,7 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 use rstar::{PointDistance, RTree, RTreeObject, AABB};
 
+use bevy::prelude::*;
 use bevy::ecs::Bundle;
 
 #[cfg(feature = "savedata")]
@@ -34,6 +35,7 @@ pub struct Chunk<T> {
     data: LodTree<T>,
     light: LodTree<f32>,
     has_light: bool,
+    entity: Option<Entity>,
 }
 
 impl<T: Voxel> Chunk<T> {
@@ -46,7 +48,16 @@ impl<T: Voxel> Chunk<T> {
             data,
             light,
             has_light: false,
+            entity: None,
         }
+    }
+
+    pub fn entity(&self) -> Option<Entity> {
+        self.entity
+    }
+    
+    pub fn set_entity(&mut self, e: Entity) {
+        self.entity = Some(e);
     }
 
     pub fn has_light(&self) -> bool {
@@ -148,6 +159,7 @@ impl<T: Voxel> From<SaveData<T>> for Chunk<T> {
             data,
             light: LodTree::new(width),
             has_light: false,
+            entity: None,
         }
     }
 }
