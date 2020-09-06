@@ -72,6 +72,10 @@ pub struct Block {
 }
 
 impl Block {
+    pub fn solid(&self) -> bool {
+        self.mesh_type == MeshType::Cube
+    }
+    
     fn mesh_cube(
         &self,
         coords: (i32, i32, i32),
@@ -193,36 +197,41 @@ impl Block {
             [x, y, z + size],
             [x, y + size, z + size],
             [x + size, y + size, z],
-            [x + size, y + size, z],
+            [x + size, y, z],
             [x, y + size, z],
             [x, y, z],
             [x + size, y, z + size],
             [x + size, y + size, z + size],
+            [x, y + size, z + size],
+            [x, y, z + size],
+            [x + size, y, z],
+            [x + size, y + size, z],
+            [x, y, z],
+            [x, y + size, z],
+            [x + size, y + size, z + size],
+            [x + size, y, z + size],
         ];
+        let front = self.shade.front;
+        let back = self.shade.back;
+        let left = self.shade.left;
+        let right = self.shade.right;
+        let shade_a = (front + left) * 0.5;
+        let shade_b = (front + right) * 0.5;
+        let shade_c = (back + left) * 0.5;
+        let shade_d = (back + right) * 0.5;
         let shades = vec![
-            self.shade.top,
-            self.shade.top,
-            self.shade.top,
-            self.shade.top,
-            self.shade.top,
-            self.shade.top,
-            self.shade.top,
-            self.shade.top,
+            shade_b, shade_b, shade_b, shade_b,
+            shade_d, shade_d, shade_d, shade_d,
+            shade_c, shade_c, shade_c, shade_c,
+            shade_a, shade_a, shade_a, shade_a,
         ];
-        let colors = vec![
-            self.color.into(),
-            self.color.into(),
-            self.color.into(),
-            self.color.into(),
-            self.color.into(),
-            self.color.into(),
-            self.color.into(),
-            self.color.into(),
-        ];
+        let colors = vec![self.color.into(); 16];
 
         let indices = vec![
             0, 1, 2, 2, 3, 0,
             4, 5, 6, 6, 7, 4,
+            8, 9, 10, 10, 11, 8,
+            12, 13, 14, 14, 15, 12,
         ];
         
         MeshPart {
@@ -342,12 +351,12 @@ fn generate_front_side(
                 let (cx, cy, cz) = chunk.position();
                 let cz = cz + cw;
                 if let Some(chunk) = map.get((cx, cy, cz)) {
-                    !chunk.contains_key((x + dx, y + dy, 0))
+                    !chunk.get((x + dx, y + dy, 0)).map(|block| block.solid()).unwrap_or(false)
                 } else {
                     false
                 }
             } else {
-                !chunk.contains_key((x + dx, y + dy, z + width))
+                !chunk.get((x + dx, y + dy, z + width)).map(|block| block.solid()).unwrap_or(false)
             };
             if render {
                 let size = width as f32;
@@ -399,12 +408,12 @@ fn generate_back_side(
                 let (cx, cy, cz) = chunk.position();
                 let cz = cz - cw;
                 if let Some(chunk) = map.get((cx, cy, cz)) {
-                    !chunk.contains_key((x + dx, y + dy, cw - 1))
+                    !chunk.get((x + dx, y + dy, cw - 1)).map(|block| block.solid()).unwrap_or(false)
                 } else {
                     false
                 }
             } else {
-                !chunk.contains_key((x + dx, y + dy, z - 1))
+                !chunk.get((x + dx, y + dy, z - 1)).map(|block| block.solid()).unwrap_or(false)
             };
             if render {
                 let size = width as f32;
@@ -456,12 +465,12 @@ fn generate_right_side(
                 let (cx, cy, cz) = chunk.position();
                 let cx = cx - cw;
                 if let Some(chunk) = map.get((cx, cy, cz)) {
-                    !chunk.contains_key((cw - 1, y + dy, z + dz))
+                    !chunk.get((cw - 1, y + dy, z + dz)).map(|block| block.solid()).unwrap_or(false)
                 } else {
                     false
                 }
             } else {
-                !chunk.contains_key((x - 1, y + dy, z + dz))
+                !chunk.get((x - 1, y + dy, z + dz)).map(|block| block.solid()).unwrap_or(false)
             };
             if render {
                 let size = width as f32;
@@ -513,12 +522,12 @@ fn generate_left_side(
                 let (cx, cy, cz) = chunk.position();
                 let cx = cx + cw;
                 if let Some(chunk) = map.get((cx, cy, cz)) {
-                    !chunk.contains_key((0, y + dy, z + dz))
+                    !chunk.get((0, y + dy, z + dz)).map(|block| block.solid()).unwrap_or(false)
                 } else {
                     false
                 }
             } else {
-                !chunk.contains_key((x + width, y + dy, z + dz))
+                !chunk.get((x + width, y + dy, z + dz)).map(|block| block.solid()).unwrap_or(false)
             };
             if render {
                 let size = width as f32;
@@ -570,12 +579,12 @@ fn generate_top_side(
                 let (cx, cy, cz) = chunk.position();
                 let cy = cy + cw;
                 if let Some(chunk) = map.get((cx, cy, cz)) {
-                    !chunk.contains_key((x + dx, 0, z + dz))
+                    !chunk.get((x + dx, 0, z + dz)).map(|block| block.solid()).unwrap_or(false)
                 } else {
                     false
                 }
             } else {
-                !chunk.contains_key((x + dx, y + width, z + dz))
+                !chunk.get((x + dx, y + width, z + dz)).map(|block| block.solid()).unwrap_or(false)
             };
             if render {
                 let size = width as f32;
@@ -627,12 +636,12 @@ fn generate_bottom_side(
                 let (cx, cy, cz) = chunk.position();
                 let cy = cy - cw;
                 if let Some(chunk) = map.get((cx, cy, cz)) {
-                    !chunk.contains_key((x + dx, cw - 1, z + dz))
+                    !chunk.get((x + dx, cw - 1, z + dz)).map(|block| block.solid()).unwrap_or(false)
                 } else {
                     false
                 }
             } else {
-                !chunk.contains_key((x + dx, y - 1, z + dz))
+                !chunk.get((x + dx, y - 1, z + dz)).map(|block| block.solid()).unwrap_or(false)
             };
             if render {
                 let size = width as f32;
