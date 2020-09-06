@@ -68,14 +68,14 @@ pub struct Block {
     #[cfg_attr(feature = "serde", serde(skip))]
     pub shade: Shade,
     pub color: Color,
-    pub mesh_type: MeshType
+    pub mesh_type: MeshType,
 }
 
 impl Block {
     pub fn solid(&self) -> bool {
         self.mesh_type == MeshType::Cube
     }
-    
+
     fn mesh_cube(
         &self,
         coords: (i32, i32, i32),
@@ -89,85 +89,49 @@ impl Block {
         let mut indices = Vec::new();
 
         let mut n = 0;
-        if let Some((p, s, c)) = generate_top_side(
-            self,
-            map,
-            chunk,
-            coords,
-            width,
-            &mut indices,
-            &mut n,
-        ) {
+        if let Some((p, s, c)) =
+            generate_top_side(self, map, chunk, coords, width, &mut indices, &mut n)
+        {
             positions.extend(&p);
             shades.extend(&s);
             colors.extend(&c);
         }
 
-        if let Some((p, s, c)) = generate_bottom_side(
-            self,
-            map,
-            chunk,
-            coords,
-            width,
-            &mut indices,
-            &mut n,
-        ) {
+        if let Some((p, s, c)) =
+            generate_bottom_side(self, map, chunk, coords, width, &mut indices, &mut n)
+        {
             positions.extend(&p);
             shades.extend(&s);
             colors.extend(&c);
         }
 
-        if let Some((p, s, c)) = generate_front_side(
-            self,
-            map,
-            chunk,
-            coords,
-            width,
-            &mut indices,
-            &mut n,
-        ) {
+        if let Some((p, s, c)) =
+            generate_front_side(self, map, chunk, coords, width, &mut indices, &mut n)
+        {
             positions.extend(&p);
             shades.extend(&s);
             colors.extend(&c);
         }
 
-        if let Some((p, s, c)) = generate_back_side(
-            self,
-            map,
-            chunk,
-            coords,
-            width,
-            &mut indices,
-            &mut n,
-        ) {
+        if let Some((p, s, c)) =
+            generate_back_side(self, map, chunk, coords, width, &mut indices, &mut n)
+        {
             positions.extend(&p);
             shades.extend(&s);
             colors.extend(&c);
         }
 
-        if let Some((p, s, c)) = generate_left_side(
-            self,
-            map,
-            chunk,
-            coords,
-            width,
-            &mut indices,
-            &mut n,
-        ) {
+        if let Some((p, s, c)) =
+            generate_left_side(self, map, chunk, coords, width, &mut indices, &mut n)
+        {
             positions.extend(&p);
             shades.extend(&s);
             colors.extend(&c);
         }
 
-        if let Some((p, s, c)) = generate_right_side(
-            self,
-            map,
-            chunk,
-            coords,
-            width,
-            &mut indices,
-            &mut n,
-        ) {
+        if let Some((p, s, c)) =
+            generate_right_side(self, map, chunk, coords, width, &mut indices, &mut n)
+        {
             positions.extend(&p);
             shades.extend(&s);
             colors.extend(&c);
@@ -220,20 +184,15 @@ impl Block {
         let shade_c = (back + left) * 0.5;
         let shade_d = (back + right) * 0.5;
         let shades = vec![
-            shade_b, shade_b, shade_b, shade_b,
-            shade_d, shade_d, shade_d, shade_d,
-            shade_c, shade_c, shade_c, shade_c,
-            shade_a, shade_a, shade_a, shade_a,
+            shade_b, shade_b, shade_b, shade_b, shade_d, shade_d, shade_d, shade_d, shade_c,
+            shade_c, shade_c, shade_c, shade_a, shade_a, shade_a, shade_a,
         ];
         let colors = vec![self.color.into(); 16];
 
         let indices = vec![
-            0, 1, 2, 2, 3, 0,
-            4, 5, 6, 6, 7, 4,
-            8, 9, 10, 10, 11, 8,
-            12, 13, 14, 14, 15, 12,
+            0, 1, 2, 2, 3, 0, 4, 5, 6, 6, 7, 4, 8, 9, 10, 10, 11, 8, 12, 13, 14, 14, 15, 12,
         ];
-        
+
         MeshPart {
             positions,
             shades,
@@ -351,12 +310,18 @@ fn generate_front_side(
                 let (cx, cy, cz) = chunk.position();
                 let cz = cz + cw;
                 if let Some(chunk) = map.get((cx, cy, cz)) {
-                    !chunk.get((x + dx, y + dy, 0)).map(|block| block.solid()).unwrap_or(false)
+                    !chunk
+                        .get((x + dx, y + dy, 0))
+                        .map(|block| block.solid())
+                        .unwrap_or(false)
                 } else {
                     false
                 }
             } else {
-                !chunk.get((x + dx, y + dy, z + width)).map(|block| block.solid()).unwrap_or(false)
+                !chunk
+                    .get((x + dx, y + dy, z + width))
+                    .map(|block| block.solid())
+                    .unwrap_or(false)
             };
             if render {
                 let size = width as f32;
@@ -408,12 +373,18 @@ fn generate_back_side(
                 let (cx, cy, cz) = chunk.position();
                 let cz = cz - cw;
                 if let Some(chunk) = map.get((cx, cy, cz)) {
-                    !chunk.get((x + dx, y + dy, cw - 1)).map(|block| block.solid()).unwrap_or(false)
+                    !chunk
+                        .get((x + dx, y + dy, cw - 1))
+                        .map(|block| block.solid())
+                        .unwrap_or(false)
                 } else {
                     false
                 }
             } else {
-                !chunk.get((x + dx, y + dy, z - 1)).map(|block| block.solid()).unwrap_or(false)
+                !chunk
+                    .get((x + dx, y + dy, z - 1))
+                    .map(|block| block.solid())
+                    .unwrap_or(false)
             };
             if render {
                 let size = width as f32;
@@ -465,12 +436,18 @@ fn generate_right_side(
                 let (cx, cy, cz) = chunk.position();
                 let cx = cx - cw;
                 if let Some(chunk) = map.get((cx, cy, cz)) {
-                    !chunk.get((cw - 1, y + dy, z + dz)).map(|block| block.solid()).unwrap_or(false)
+                    !chunk
+                        .get((cw - 1, y + dy, z + dz))
+                        .map(|block| block.solid())
+                        .unwrap_or(false)
                 } else {
                     false
                 }
             } else {
-                !chunk.get((x - 1, y + dy, z + dz)).map(|block| block.solid()).unwrap_or(false)
+                !chunk
+                    .get((x - 1, y + dy, z + dz))
+                    .map(|block| block.solid())
+                    .unwrap_or(false)
             };
             if render {
                 let size = width as f32;
@@ -522,12 +499,18 @@ fn generate_left_side(
                 let (cx, cy, cz) = chunk.position();
                 let cx = cx + cw;
                 if let Some(chunk) = map.get((cx, cy, cz)) {
-                    !chunk.get((0, y + dy, z + dz)).map(|block| block.solid()).unwrap_or(false)
+                    !chunk
+                        .get((0, y + dy, z + dz))
+                        .map(|block| block.solid())
+                        .unwrap_or(false)
                 } else {
                     false
                 }
             } else {
-                !chunk.get((x + width, y + dy, z + dz)).map(|block| block.solid()).unwrap_or(false)
+                !chunk
+                    .get((x + width, y + dy, z + dz))
+                    .map(|block| block.solid())
+                    .unwrap_or(false)
             };
             if render {
                 let size = width as f32;
@@ -579,12 +562,18 @@ fn generate_top_side(
                 let (cx, cy, cz) = chunk.position();
                 let cy = cy + cw;
                 if let Some(chunk) = map.get((cx, cy, cz)) {
-                    !chunk.get((x + dx, 0, z + dz)).map(|block| block.solid()).unwrap_or(false)
+                    !chunk
+                        .get((x + dx, 0, z + dz))
+                        .map(|block| block.solid())
+                        .unwrap_or(false)
                 } else {
                     false
                 }
             } else {
-                !chunk.get((x + dx, y + width, z + dz)).map(|block| block.solid()).unwrap_or(false)
+                !chunk
+                    .get((x + dx, y + width, z + dz))
+                    .map(|block| block.solid())
+                    .unwrap_or(false)
             };
             if render {
                 let size = width as f32;
@@ -636,12 +625,18 @@ fn generate_bottom_side(
                 let (cx, cy, cz) = chunk.position();
                 let cy = cy - cw;
                 if let Some(chunk) = map.get((cx, cy, cz)) {
-                    !chunk.get((x + dx, cw - 1, z + dz)).map(|block| block.solid()).unwrap_or(false)
+                    !chunk
+                        .get((x + dx, cw - 1, z + dz))
+                        .map(|block| block.solid())
+                        .unwrap_or(false)
                 } else {
                     false
                 }
             } else {
-                !chunk.get((x + dx, y - 1, z + dz)).map(|block| block.solid()).unwrap_or(false)
+                !chunk
+                    .get((x + dx, y - 1, z + dz))
+                    .map(|block| block.solid())
+                    .unwrap_or(false)
             };
             if render {
                 let size = width as f32;

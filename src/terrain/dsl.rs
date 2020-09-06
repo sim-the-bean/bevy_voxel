@@ -1,6 +1,8 @@
-use std::ops::{Add, Sub, Mul, Div, Rem};
-use std::cmp::{Ordering, PartialEq, PartialOrd};
-use std::fmt::{self, Display};
+use std::{
+    cmp::{Ordering, PartialEq, PartialOrd},
+    fmt::{self, Display},
+    ops::{Add, Div, Mul, Rem, Sub},
+};
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -57,7 +59,7 @@ impl Type {
             Self::Float3 => Value::Float3(Vec3::zero()),
         }
     }
-    
+
     pub fn rand<R: Rng>(&self, rng: &mut R) -> Value {
         match self {
             Self::Unit => Value::Unit,
@@ -106,12 +108,10 @@ impl Display for Type {
 }
 
 macro_rules! type_error {
-    ($e:expr, $t:expr) => {
-        {
-            let e = $e;
-            panic!("{}: {} is not of type {}", e, e.type_of(), $t)
-        }
-    }
+    ($e:expr, $t:expr) => {{
+        let e = $e;
+        panic!("{}: {} is not of type {}", e, e.type_of(), $t)
+    }};
 }
 
 #[cfg_attr(feature = "savedata", derive(Serialize, Deserialize))]
@@ -143,28 +143,28 @@ impl Value {
             Self::Float3(_) => Type::Float3,
         }
     }
-    
+
     pub fn as_unit(&self) -> () {
         match self {
             Self::Unit => (),
             _ => type_error!(self, Type::Unit),
         }
     }
-    
+
     pub fn as_bool(&self) -> bool {
         match self {
             Self::Bool(x) => *x,
             _ => type_error!(self, Type::Bool),
         }
     }
-    
+
     pub fn as_float(&self) -> f32 {
         match self {
             Self::Float(x) => *x,
             _ => type_error!(self, Type::Float),
         }
     }
-    
+
     pub fn as_float3(&self) -> Vec3 {
         match self {
             Self::Float3(x) => *x,
@@ -229,7 +229,11 @@ impl Rem for Value {
             Self::Float(this) => Self::Float(this + other.as_float()),
             Self::Float3(this) => {
                 let other = other.as_float3();
-                Self::Float3(Vec3::new(this.x() % other.x(), this.y() % other.y(), this.z() % other.z()))
+                Self::Float3(Vec3::new(
+                    this.x() % other.x(),
+                    this.y() % other.y(),
+                    this.z() % other.z(),
+                ))
             }
             _ => type_error!(self, Type::Float),
         }
@@ -276,7 +280,7 @@ impl Expression {
             Self::Cast(t, e) => t.cast(e.execute(rng)),
         }
     }
-    
+
     pub fn type_of(&self) -> Type {
         match self {
             Self::Unit => Type::Unit,
@@ -296,23 +300,23 @@ impl Expression {
     pub fn is_true(self) -> BlockQuery {
         BlockQuery::Expression(ExpressionQuery::IsTrue(self))
     }
-    
+
     pub fn add(self, other: Self) -> Self {
         Self::Add(Box::new(self), Box::new(other))
     }
-    
+
     pub fn sub(self, other: Self) -> Self {
         Self::Sub(Box::new(self), Box::new(other))
     }
-    
+
     pub fn mul(self, other: Self) -> Self {
         Self::Mul(Box::new(self), Box::new(other))
     }
-    
+
     pub fn div(self, other: Self) -> Self {
         Self::Div(Box::new(self), Box::new(other))
     }
-    
+
     pub fn rem(self, other: Self) -> Self {
         Self::Rem(Box::new(self), Box::new(other))
     }
@@ -343,23 +347,24 @@ pub enum ComplexQuery {
 }
 
 impl ComplexQuery {
-    pub fn execute<R: Rng, T: Voxel>(&self, rng: &mut R, xz: Option<(i32, i32)>, chunk: &Chunk<T>) -> Option<Value> {
+    pub fn execute<R: Rng, T: Voxel>(
+        &self,
+        rng: &mut R,
+        xz: Option<(i32, i32)>,
+        chunk: &Chunk<T>,
+    ) -> Option<Value> {
         match self {
-            ComplexQuery::Map(q, e) => {
-                q.execute(rng, xz, chunk).map(|_| e.execute(rng))
-            }
-            ComplexQuery::Not(q) => {
-                match q.execute(rng, xz, chunk) {
-                    Some(_) => None,
-                    None => Some(Value::Unit),
-                }
-            }
-            ComplexQuery::And(a, b) => {
-                a.execute(rng, xz, chunk).and_then(|_| b.execute(rng, xz, chunk))
-            }
-            ComplexQuery::Or(a, b) => {
-                a.execute(rng, xz, chunk).or_else(|| b.execute(rng, xz, chunk))
-            }
+            ComplexQuery::Map(q, e) => q.execute(rng, xz, chunk).map(|_| e.execute(rng)),
+            ComplexQuery::Not(q) => match q.execute(rng, xz, chunk) {
+                Some(_) => None,
+                None => Some(Value::Unit),
+            },
+            ComplexQuery::And(a, b) => a
+                .execute(rng, xz, chunk)
+                .and_then(|_| b.execute(rng, xz, chunk)),
+            ComplexQuery::Or(a, b) => a
+                .execute(rng, xz, chunk)
+                .or_else(|| b.execute(rng, xz, chunk)),
         }
     }
 }
@@ -428,11 +433,19 @@ pub enum BlockQuery {
 }
 
 impl BlockQuery {
-    pub fn execute<R: Rng, T: Voxel>(&self, rng: &mut R, xz: Option<(i32, i32)>, chunk: &Chunk<T>) -> Option<Value> {
+    pub fn execute<R: Rng, T: Voxel>(
+        &self,
+        rng: &mut R,
+        xz: Option<(i32, i32)>,
+        chunk: &Chunk<T>,
+    ) -> Option<Value> {
         match self {
             BlockQuery::Complex(q) => q.execute(rng, xz, chunk),
             BlockQuery::Expression(q) => q.execute(rng),
-            BlockQuery::Column(q) => q.execute(xz.expect("column queries must be supplied with a xz coordinate"), chunk),
+            BlockQuery::Column(q) => q.execute(
+                xz.expect("column queries must be supplied with a xz coordinate"),
+                chunk,
+            ),
         }
     }
 
@@ -458,34 +471,37 @@ impl BlockQuery {
 pub enum Statement<T: Voxel> {
     SetBlock {
         q: BlockQuery,
-        block: T
+        block: T,
     },
     SetColumn {
         q: BlockQuery,
         h: BlockQuery,
-        block: T
+        block: T,
     },
     Fill {
         p1: BlockQuery,
         p2: BlockQuery,
-        block: T
+        block: T,
     },
 }
 
 impl<T: Voxel> Statement<T> {
-    pub fn execute<R: Rng>(&self, rng: &mut R, xz: Option<(i32, i32)>, chunk: &Chunk<T>) -> Result<T> {
+    pub fn execute<R: Rng>(
+        &self,
+        rng: &mut R,
+        xz: Option<(i32, i32)>,
+        chunk: &Chunk<T>,
+    ) -> Result<T> {
         let block = match self {
-            Self::SetBlock { q, block } => {
-                q.execute(rng, xz, chunk).map(move |v| {
-                    let pos = v.as_float3();
-                    let (x, y, z) = (pos.x() as i32, pos.y() as i32, pos.z() as i32);
-                    BlockDiff {
-                        at: (x, y, z),
-                        size: (1, 1, 1),
-                        data: vec![block.clone()],
-                    }
-                })
-            }
+            Self::SetBlock { q, block } => q.execute(rng, xz, chunk).map(move |v| {
+                let pos = v.as_float3();
+                let (x, y, z) = (pos.x() as i32, pos.y() as i32, pos.z() as i32);
+                BlockDiff {
+                    at: (x, y, z),
+                    size: (1, 1, 1),
+                    data: vec![block.clone()],
+                }
+            }),
             _ => todo!(),
         };
         Result { block }
@@ -496,7 +512,7 @@ impl<T: Voxel> Statement<T> {
 pub struct BlockDiff<T: Voxel> {
     pub(crate) at: (i32, i32, i32),
     pub(crate) size: (usize, usize, usize),
-    pub(crate) data: Vec<T>
+    pub(crate) data: Vec<T>,
 }
 
 #[derive(Debug, Clone)]
@@ -513,7 +529,10 @@ pub struct Octave {
 
 impl Octave {
     pub fn new(amplitude: f64, frequency: f64) -> Self {
-        Self { amplitude, frequency }
+        Self {
+            amplitude,
+            frequency,
+        }
     }
 }
 
@@ -571,14 +590,14 @@ impl Filter {
             Filter::Bilinear(_) => 1,
         }
     }
-    
+
     pub fn as_i32(&self) -> i32 {
         match self {
             Filter::NearestNeighbour => 1,
             Filter::Bilinear(width) => *width,
         }
     }
-    
+
     pub fn as_usize(&self) -> usize {
         self.as_i32() as _
     }
@@ -616,7 +635,9 @@ impl<T: Voxel> Default for Biome<T> {
 
 impl<T: Voxel> Biome<T> {
     pub fn build() -> BiomeBuilder<T> {
-        BiomeBuilder { inner: Self::default() }
+        BiomeBuilder {
+            inner: Self::default(),
+        }
     }
 }
 
@@ -628,12 +649,12 @@ impl<T: Voxel> BiomeBuilder<T> {
     pub fn build(self) -> Biome<T> {
         self.inner
     }
-    
+
     pub fn name(mut self, name: &'static str) -> Self {
         self.inner.name = Some(name);
         self
     }
-    
+
     pub fn spawn_probability(mut self, p: f64) -> Self {
         self.inner.prob = p;
         self
@@ -692,7 +713,9 @@ impl<T: Voxel> Default for Program<T> {
 
 impl<T: Voxel> Program<T> {
     pub fn build() -> ProgramBuilder<T> {
-        ProgramBuilder { inner: Self::default() }
+        ProgramBuilder {
+            inner: Self::default(),
+        }
     }
 }
 
@@ -702,14 +725,21 @@ pub struct ProgramBuilder<T: Voxel> {
 
 impl<T: Voxel> ProgramBuilder<T> {
     pub fn build(mut self) -> Program<T> {
-        let sum = self.inner.biomes.iter().map(|biome| biome.prob).sum::<f64>();
+        let sum = self
+            .inner
+            .biomes
+            .iter()
+            .map(|biome| biome.prob)
+            .sum::<f64>();
         for biome in &mut self.inner.biomes {
             biome.prob /= sum;
         }
-        self.inner.biomes.sort_unstable_by(|a, b| a.prob.partial_cmp(&b.prob).unwrap_or(Ordering::Equal));
+        self.inner
+            .biomes
+            .sort_unstable_by(|a, b| a.prob.partial_cmp(&b.prob).unwrap_or(Ordering::Equal));
         self.inner
     }
-    
+
     pub fn name(mut self, name: &'static str) -> Self {
         self.inner.name = Some(name);
         self
@@ -719,12 +749,12 @@ impl<T: Voxel> ProgramBuilder<T> {
         self.inner.biome_frequency = freq;
         self
     }
-    
+
     pub fn noise_dimensions(mut self, d: NoiseDimensions) -> Self {
         self.inner.dimensions = d;
         self
     }
-    
+
     pub fn noise_type(mut self, n: NoiseType) -> Self {
         self.inner.noise_type = n;
         self
@@ -753,7 +783,10 @@ impl<T: Voxel> ProgramBuilder<T> {
     pub fn filter(mut self, filter: Filter) -> Self {
         match filter {
             Filter::NearestNeighbour => {}
-            Filter::Bilinear(width) => assert!((width as u32).is_power_of_two(), "bilinear filter must have a power of two width"),
+            Filter::Bilinear(width) => assert!(
+                (width as u32).is_power_of_two(),
+                "bilinear filter must have a power of two width"
+            ),
         }
         self.inner.filter = filter;
         self

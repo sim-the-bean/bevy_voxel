@@ -23,7 +23,12 @@ pub struct HeightChunk {
 
 impl HeightChunk {
     pub fn new(position: (i32, i32), width: usize, filter: Filter, array: Vec<f32>) -> Self {
-        Self { position, width, filter, array }
+        Self {
+            position,
+            width,
+            filter,
+            array,
+        }
     }
 
     pub fn get(&self, (x, z): (i32, i32)) -> f32 {
@@ -97,7 +102,11 @@ impl HeightMap {
         self.map.locate_at_point_mut(&[x, z])
     }
 
-    pub fn get_mut_or_else<F: FnOnce() -> HeightChunk>(&mut self, (x, z): (i32, i32), f: F) -> &mut HeightChunk {
+    pub fn get_mut_or_else<F: FnOnce() -> HeightChunk>(
+        &mut self,
+        (x, z): (i32, i32),
+        f: F,
+    ) -> &mut HeightChunk {
         if self.get((x, z)).is_some() {
             self.get_mut((x, z)).unwrap()
         } else {
@@ -118,24 +127,29 @@ impl HeightMap {
 }
 
 impl<T: Voxel> Program<T> {
-    pub fn height_chunk<N: NoiseFn<[f64; 2]> + Seedable + Default>(&self, (cx, cz): (i32, i32)) -> HeightChunk {
+    pub fn height_chunk<N: NoiseFn<[f64; 2]> + Seedable + Default>(
+        &self,
+        (cx, cz): (i32, i32),
+    ) -> HeightChunk {
         let a = self.filter.aux_width();
-        let mut chunk = Vec::with_capacity((self.chunk_width() / self.filter.as_usize() + a as usize).pow(2));
-        
+        let mut chunk =
+            Vec::with_capacity((self.chunk_width() / self.filter.as_usize() + a as usize).pow(2));
+
         let noise = N::default().set_seed(self.seed);
         let unit_width = self.unit_width() as i32;
 
         let size = self.chunk_width() as i32 / self.filter.as_i32();
-        
+
         let mut biome_map = Vec::with_capacity(chunk.capacity());
-        
+
         for x in 0..size + a {
             let ax = cx + x * unit_width * self.filter.as_i32();
             let fx = ax as f64;
             for z in 0..size + a {
                 let az = cz + z * unit_width * self.filter.as_i32();
                 let fz = az as f64;
-                let mut height = noise.get([fx * self.biome_frequency, fz * self.biome_frequency]) * 0.5 + 0.5;
+                let mut height =
+                    noise.get([fx * self.biome_frequency, fz * self.biome_frequency]) * 0.5 + 0.5;
                 let mut idx = 0_usize;
                 for (i, biome) in self.biomes.iter().enumerate() {
                     if height < biome.prob {
@@ -147,7 +161,7 @@ impl<T: Voxel> Program<T> {
                 biome_map.push(idx);
             }
         }
-        
+
         for x in 0..size + a {
             let ax = cx + x * unit_width * self.filter.as_i32();
             let fx = ax as f64;
@@ -158,16 +172,21 @@ impl<T: Voxel> Program<T> {
                 let biome = &self.biomes[biome];
                 let mut height = 0.0;
                 for octave in &biome.octaves {
-                    height +=
-                        noise.get([fx * octave.frequency, fz * octave.frequency]) * octave.amplitude;
+                    height += noise.get([fx * octave.frequency, fz * octave.frequency])
+                        * octave.amplitude;
                 }
                 chunk.push(height as f32);
             }
         }
 
-        HeightChunk::new((cx, cz), self.chunk_width().div_euclid(self.filter.as_usize()) + a as usize, self.filter, chunk)
+        HeightChunk::new(
+            (cx, cz),
+            self.chunk_width().div_euclid(self.filter.as_usize()) + a as usize,
+            self.filter,
+            chunk,
+        )
     }
-    
+
     pub fn chunk_width(&self) -> usize {
         2_usize.pow(self.chunk_size - self.subdivisions)
     }
@@ -180,8 +199,12 @@ impl<T: Voxel> Program<T> {
         match self.dimensions {
             NoiseDimensions::Two => match self.noise_type {
                 NoiseType::Perlin => terrain_gen2_impl::<_, Perlin>(self, height_map, coords),
-                NoiseType::OpenSimplex => terrain_gen2_impl::<_, OpenSimplex>(self, height_map, coords),
-                NoiseType::SuperSimplex => terrain_gen2_impl::<_, SuperSimplex>(self, height_map, coords),
+                NoiseType::OpenSimplex => {
+                    terrain_gen2_impl::<_, OpenSimplex>(self, height_map, coords)
+                }
+                NoiseType::SuperSimplex => {
+                    terrain_gen2_impl::<_, SuperSimplex>(self, height_map, coords)
+                }
             },
             NoiseDimensions::Three => match self.noise_type {
                 NoiseType::Perlin => terrain_gen3_impl::<_, Perlin>(self, coords),
@@ -251,25 +274,24 @@ fn terrain_gen2_impl<T: Voxel, N: NoiseFn<[f64; 2]> + Seedable + Default>(
     height_map: &mut HeightMap,
     (cx, cy, cz): (i32, i32, i32),
 ) -> Chunk<T> {
-    let height_chunk = height_map.get_mut_or_else((cx, cz), || {
-        params.height_chunk::<N>((cx, cz))
-    });
-    
+    let height_chunk = height_map.get_mut_or_else((cx, cz), || params.height_chunk::<N>((cx, cz)));
+
     let mut chunk = Chunk::new(params.chunk_size, (cx, cy, cz));
     let unit_width = params.unit_width() as i32;
 
     let size = params.chunk_width() as i32;
-        
+
     let noise = N::default().set_seed(params.seed);
     let mut biome_map = Vec::with_capacity(params.chunk_size.pow(2) as usize);
-    
+
     for x in 0..size {
         let ax = cx + x * unit_width * params.filter.as_i32();
         let fx = ax as f64;
         for z in 0..size {
             let az = cz + z * unit_width * params.filter.as_i32();
             let fz = az as f64;
-            let mut height = noise.get([fx * params.biome_frequency, fz * params.biome_frequency]) * 0.5 + 0.5;
+            let mut height =
+                noise.get([fx * params.biome_frequency, fz * params.biome_frequency]) * 0.5 + 0.5;
             let mut idx = 0_usize;
             for (i, biome) in params.biomes.iter().enumerate() {
                 if height < biome.prob {
@@ -281,7 +303,7 @@ fn terrain_gen2_impl<T: Voxel, N: NoiseFn<[f64; 2]> + Seedable + Default>(
             biome_map.push(idx);
         }
     }
-    
+
     let by = cy / unit_width;
     for x in 0..size {
         for z in 0..size {
@@ -315,7 +337,7 @@ fn terrain_gen2_impl<T: Voxel, N: NoiseFn<[f64; 2]> + Seedable + Default>(
     }
 
     let mut rng = rand::rngs::SmallRng::seed_from_u64((cx as u64) << 32 | cz as u64);
-    
+
     for x in 0..size {
         for z in 0..size {
             let biome = biome_map[(x * size + z) as usize];
@@ -334,18 +356,24 @@ fn terrain_gen2_impl<T: Voxel, N: NoiseFn<[f64; 2]> + Seedable + Default>(
                                             let x = diff.at.0 + ux as i32 + ix;
                                             let y = diff.at.1 + uy as i32 + iy;
                                             let z = diff.at.2 + uz as i32 + iz;
-                                            chunk.insert((x, y, z), diff.data[ux * diff.size.1 * diff.size.2 + uy * diff.size.2 + uz].clone());
+                                            chunk.insert(
+                                                (x, y, z),
+                                                diff.data[ux * diff.size.1 * diff.size.2
+                                                    + uy * diff.size.2
+                                                    + uz]
+                                                    .clone(),
+                                            );
                                         }
                                     }
                                 }
-                           }
+                            }
                         }
                     }
                 }
             }
         }
     }
-    
+
     chunk
 }
 

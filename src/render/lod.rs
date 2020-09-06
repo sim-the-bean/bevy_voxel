@@ -26,8 +26,7 @@ pub fn lod_update<T: Voxel>(
             let (x, y, z) = chunk.position();
             let lod = ((camera_x - x).abs() / 128)
                 .max((camera_y - y).abs() / 128)
-                .max((camera_z - z).abs() / 128)
-                as usize;
+                .max((camera_z - z).abs() / 128) as usize;
             chunk.set_lod(lod);
         }
     }

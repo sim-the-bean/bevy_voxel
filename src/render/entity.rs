@@ -104,12 +104,9 @@ pub fn generate_chunk_mesh<T: VoxelExt>(map: &Map<T>, chunk: &Chunk<T>) -> Optio
     let mut n = 0;
 
     for elem in chunk.iter() {
-        let mut mesh = elem.value.mesh(
-            (elem.x, elem.y, elem.z),
-            map,
-            chunk,
-            elem.width,
-        );
+        let mut mesh = elem
+            .value
+            .mesh((elem.x, elem.y, elem.z), map, chunk, elem.width);
 
         let count = mesh.positions.len();
         mesh.indices.iter_mut().for_each(|i| *i += n as u32);

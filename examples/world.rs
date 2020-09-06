@@ -1,5 +1,5 @@
 #[cfg(feature = "savedata")]
-use std::{path::Path, fs::File};
+use std::{fs::File, path::Path};
 
 #[cfg(feature = "savedata")]
 use serde::{de::DeserializeOwned, Serialize};
@@ -29,12 +29,12 @@ pub const WORLD_HEIGHT: i32 = 96;
 
 pub fn main() {
     let params = Program::build()
-    	.seed(0)
-    	.noise_type(NoiseType::SuperSimplex)
-    	.noise_dimensions(NoiseDimensions::Two)
-    	.chunk_size(CHUNK_SIZE)
-    	.subdivisions(1)
-    	.filter(Filter::Bilinear(2))
+        .seed(0)
+        .noise_type(NoiseType::SuperSimplex)
+        .noise_dimensions(NoiseDimensions::Two)
+        .chunk_size(CHUNK_SIZE)
+        .subdivisions(1)
+        .filter(Filter::Bilinear(2))
         .biome_frequency(0.001)
         .biome(
             Biome::build()
@@ -43,55 +43,45 @@ pub fn main() {
                 .octave(Octave::new(8.0, 0.01))
                 .octave(Octave::new(2.0, 0.05))
                 .octave(Octave::new(1.0, 0.10))
-                .layer(
-                    Layer::new(
-                        Block {
-                            color: Color::rgb(0.08, 0.08, 0.08),
-                            ..Default::default()
-                        },
-                        f64::INFINITY,
-                    )
-                )
-                .layer(
-                    Layer::new(
-                        Block {
-                            color: Color::rgb(0.5, 0.5, 0.5),
-                            ..Default::default()
-                        },
-                        16.0,
-                    )
-                )
-                .layer(
-                    Layer::new(
-                        Block {
-                            color: Color::rgb(0.396, 0.263, 0.129),
-                            ..Default::default()
-                        },
-                        3.0,
-                    )
-                )
-                .layer(
-                    Layer::new(
-                        Block {
-                            color: Color::rgb(0.0, 0.416, 0.306),
-                            ..Default::default()
-                        },
-                        1.0,
-                    )
-                )
+                .layer(Layer::new(
+                    Block {
+                        color: Color::rgb(0.08, 0.08, 0.08),
+                        ..Default::default()
+                    },
+                    f64::INFINITY,
+                ))
+                .layer(Layer::new(
+                    Block {
+                        color: Color::rgb(0.5, 0.5, 0.5),
+                        ..Default::default()
+                    },
+                    16.0,
+                ))
+                .layer(Layer::new(
+                    Block {
+                        color: Color::rgb(0.396, 0.263, 0.129),
+                        ..Default::default()
+                    },
+                    3.0,
+                ))
+                .layer(Layer::new(
+                    Block {
+                        color: Color::rgb(0.0, 0.416, 0.306),
+                        ..Default::default()
+                    },
+                    1.0,
+                ))
                 .per_xz(
                     Expression::Ratio(3, 10)
                         .is_true()
                         .and_then(BlockQuery::y_top())
-                        .set_block(
-                            Block {
-                                color: Color::rgb(0.0, 0.6, 0.2),
-                                mesh_type: MeshType::Cross,
-                                ..Default::default()
-                            }
-                        )
+                        .set_block(Block {
+                            color: Color::rgb(0.0, 0.6, 0.2),
+                            mesh_type: MeshType::Cross,
+                            ..Default::default()
+                        }),
                 )
-                .build()
+                .build(),
         )
         .biome(
             Biome::build()
@@ -100,55 +90,45 @@ pub fn main() {
                 .octave(Octave::new(8.0, 0.01))
                 .octave(Octave::new(2.0, 0.05))
                 .octave(Octave::new(1.0, 0.10))
-                .layer(
-                    Layer::new(
-                        Block {
-                            color: Color::rgb(0.08, 0.08, 0.08),
-                            ..Default::default()
-                        },
-                        f64::INFINITY,
-                    )
-                )
-                .layer(
-                    Layer::new(
-                        Block {
-                            color: Color::rgb(0.5, 0.5, 0.5),
-                            ..Default::default()
-                        },
-                        16.0,
-                    )
-                )
-                .layer(
-                    Layer::new(
-                        Block {
-                            color: Color::rgb(0.396, 0.263, 0.129),
-                            ..Default::default()
-                        },
-                        3.0,
-                    )
-                )
-                .layer(
-                    Layer::new(
-                        Block {
-                            color: Color::rgb(0.0, 0.416, 0.306),
-                            ..Default::default()
-                        },
-                        1.0,
-                    )
-                )
+                .layer(Layer::new(
+                    Block {
+                        color: Color::rgb(0.08, 0.08, 0.08),
+                        ..Default::default()
+                    },
+                    f64::INFINITY,
+                ))
+                .layer(Layer::new(
+                    Block {
+                        color: Color::rgb(0.5, 0.5, 0.5),
+                        ..Default::default()
+                    },
+                    16.0,
+                ))
+                .layer(Layer::new(
+                    Block {
+                        color: Color::rgb(0.396, 0.263, 0.129),
+                        ..Default::default()
+                    },
+                    3.0,
+                ))
+                .layer(Layer::new(
+                    Block {
+                        color: Color::rgb(0.0, 0.416, 0.306),
+                        ..Default::default()
+                    },
+                    1.0,
+                ))
                 .per_xz(
                     Expression::Ratio(4, 10)
                         .is_true()
                         .and_then(BlockQuery::y_top())
-                        .set_block(
-                            Block {
-                                color: Color::rgb(0.6, 0.6, 0.2),
-                                mesh_type: MeshType::Cross,
-                                ..Default::default()
-                            }
-                        )
+                        .set_block(Block {
+                            color: Color::rgb(0.6, 0.6, 0.2),
+                            mesh_type: MeshType::Cross,
+                            ..Default::default()
+                        }),
                 )
-                .build()
+                .build(),
         )
         .biome(
             Biome::build()
@@ -157,43 +137,35 @@ pub fn main() {
                 .octave(Octave::new(24.0, 0.01))
                 .octave(Octave::new(2.0, 0.05))
                 .octave(Octave::new(1.0, 0.10))
-                .layer(
-                    Layer::new(
-                        Block {
-                            color: Color::rgb(0.08, 0.08, 0.08),
-                            ..Default::default()
-                        },
-                        f64::INFINITY,
-                    )
-                )
-                .layer(
-                    Layer::new(
-                        Block {
-                            color: Color::rgb(0.5, 0.5, 0.5),
-                            ..Default::default()
-                        },
-                        16.0,
-                    )
-                )
-                .layer(
-                    Layer::new(
-                        Block {
-                            color: Color::rgb(0.396, 0.263, 0.129),
-                            ..Default::default()
-                        },
-                        3.0,
-                    )
-                )
-                .layer(
-                    Layer::new(
-                        Block {
-                            color: Color::rgb(0.0, 0.416, 0.306),
-                            ..Default::default()
-                        },
-                        1.0,
-                    )
-                )
-                .build()
+                .layer(Layer::new(
+                    Block {
+                        color: Color::rgb(0.08, 0.08, 0.08),
+                        ..Default::default()
+                    },
+                    f64::INFINITY,
+                ))
+                .layer(Layer::new(
+                    Block {
+                        color: Color::rgb(0.5, 0.5, 0.5),
+                        ..Default::default()
+                    },
+                    16.0,
+                ))
+                .layer(Layer::new(
+                    Block {
+                        color: Color::rgb(0.396, 0.263, 0.129),
+                        ..Default::default()
+                    },
+                    3.0,
+                ))
+                .layer(Layer::new(
+                    Block {
+                        color: Color::rgb(0.0, 0.416, 0.306),
+                        ..Default::default()
+                    },
+                    1.0,
+                ))
+                .build(),
         )
         .build();
     App::build()
@@ -247,10 +219,9 @@ fn setup(mut commands: Commands) {
                         let x = cx * chunk_size;
                         let y = cy * chunk_size;
                         let z = cz * chunk_size;
-                        update.updates.insert(
-                            (x, y, z),
-                            ChunkUpdate::UpdateLightMap,
-                        );
+                        update
+                            .updates
+                            .insert((x, y, z), ChunkUpdate::UpdateLightMap);
                     }
                 }
             }
@@ -270,10 +241,7 @@ fn setup(mut commands: Commands) {
                 let x = cx * chunk_size;
                 let y = cy * chunk_size;
                 let z = cz * chunk_size;
-                update.updates.insert(
-                    (x, y, z),
-                    ChunkUpdate::GenerateChunk,
-                );
+                update.updates.insert((x, y, z), ChunkUpdate::GenerateChunk);
             }
         }
     }
@@ -301,7 +269,7 @@ fn chunk_update<T: VoxelExt>(
             let chunk = map.get((x, y, z)).unwrap();
 
             let mesh = generate_chunk_mesh(&map, &chunk);
-            
+
             if let Some(mesh) = mesh {
                 let chunk = map.get_mut((x, y, z)).unwrap();
                 if let Some(e) = chunk.entity() {

@@ -11,8 +11,7 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 use rstar::{PointDistance, RTree, RTreeObject, AABB};
 
-use bevy::prelude::*;
-use bevy::ecs::Bundle;
+use bevy::{ecs::Bundle, prelude::*};
 
 #[cfg(feature = "savedata")]
 use crate::collections::RleTree;
@@ -55,7 +54,7 @@ impl<T: Voxel> Chunk<T> {
     pub fn entity(&self) -> Option<Entity> {
         self.entity
     }
-    
+
     pub fn set_entity(&mut self, e: Entity) {
         self.entity = Some(e);
     }

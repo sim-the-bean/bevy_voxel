@@ -195,7 +195,10 @@ impl<T: Voxel> LodTree<T> {
                             Node::Value(value, width) => break (value, width),
                         }
                     };
-                    if elem.as_ref().map(|v| v.can_merge()).unwrap_or(true) && elem == pivot && width == pivot_width {
+                    if elem.as_ref().map(|v| v.can_merge()).unwrap_or(true)
+                        && elem == pivot
+                        && width == pivot_width
+                    {
                         merges.entry(pivot_idx).or_default().push(i);
                     }
                 }
@@ -340,7 +343,7 @@ impl<T: Voxel> LodTree<T> {
         {
             return None;
         }
-        
+
         if self.lod == 0 {
             self.get_impl((x, y, z)).map(Cow::Borrowed)
         } else {
@@ -621,7 +624,6 @@ mod tests {
         assert_eq!(vt.get((1, 1, 1)).unwrap().into_owned(), 1);
         assert_eq!(vt.get((2, 2, 2)).unwrap().into_owned(), 2);
         assert_eq!(vt.get((3, 3, 3)).unwrap().into_owned(), 3);
-                   
     }
 
     #[test]
@@ -657,12 +659,7 @@ mod tests {
             .elements()
             .map(|elem| ((elem.x, elem.y, elem.z), *elem.value, elem.width))
             .all(|elem| {
-                [
-                    ((0, 0, 0), 0, 1),
-                    ((0, 0, 1), 1, 1),
-                    ((2, 0, 0), 2, 1),
-                ]
-                .contains(&elem)
+                [((0, 0, 0), 0, 1), ((0, 0, 1), 1, 1), ((2, 0, 0), 2, 1)].contains(&elem)
             }));
     }
 
@@ -679,7 +676,7 @@ mod tests {
         vt.insert((3, 3, 3), 0);
 
         vt.merge();
-        
+
         assert_eq!(vt.elements().count(), 1);
 
         assert_eq!(vt.position(&0), Some((2, 2, 2)));
