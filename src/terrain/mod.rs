@@ -1,4 +1,9 @@
+use std::time::Instant;
+
 use bevy::prelude::*;
+use bevy::diagnostic::Diagnostic;
+use bevy::diagnostic::Diagnostics;
+use bevy::diagnostic::DiagnosticId;
 
 use noise::{NoiseFn, OpenSimplex, Perlin, Seedable, SuperSimplex};
 use rand::SeedableRng;
@@ -12,6 +17,8 @@ use crate::{
 pub mod dsl;
 
 pub use dsl::*;
+
+pub const WORLD_GEN_DIAGNOSTIC: DiagnosticId = DiagnosticId::from_u128(1234057812345871);
 
 #[derive(Debug, Clone)]
 pub struct HeightChunk {
@@ -233,9 +240,12 @@ impl<T: Voxel> Program<T> {
 pub fn terrain_generation<T: Voxel>(
     params: Res<Program<T>>,
     mut height_map: ResMut<HeightMap>,
+    mut diagnostics: ResMut<Diagnostics>,
     mut query: Query<(&mut Map<T>, &mut MapUpdates)>,
 ) {
-    let max_count = 4;
+    let start = Instant::now();
+    
+    let max_count = 8;
     let mut count = 0;
     for (mut map, mut map_update) in &mut query.iter() {
         let mut remove = Vec::new();
@@ -282,6 +292,13 @@ pub fn terrain_generation<T: Voxel>(
             }
         }
     }
+    
+    let end = Instant::now();
+    let duration = (end - start).as_secs_f64();
+    if diagnostics.get(WORLD_GEN_DIAGNOSTIC).is_none() {
+        diagnostics.add(Diagnostic::new(WORLD_GEN_DIAGNOSTIC, "world gen", 20));
+    }
+    diagnostics.add_measurement(WORLD_GEN_DIAGNOSTIC, duration);
 }
 
 fn terrain_gen2_impl<T: Voxel, N: NoiseFn<[f64; 2]> + Seedable + Default>(

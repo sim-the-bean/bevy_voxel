@@ -1,4 +1,13 @@
+use std::sync::mpsc;
+use std::time::Instant;
+use std::collections::HashMap;
+
+use rayon::prelude::*;
+
 use bevy::prelude::*;
+use bevy::diagnostic::Diagnostic;
+use bevy::diagnostic::Diagnostics;
+use bevy::diagnostic::DiagnosticId;
 
 use line_drawing::{Bresenham3d, VoxelOrigin, WalkVoxels};
 
@@ -6,6 +15,9 @@ use crate::{
     render::entity::{Face, VoxelExt},
     world::{ChunkUpdate, Map, MapUpdates},
 };
+
+pub const LIGHT_MAP_DIAGNOSTIC: DiagnosticId = DiagnosticId::from_u128(1235078163485702);
+pub const LIGHT_UPDATE_DIAGNOSTIC: DiagnosticId = DiagnosticId::from_u128(1098234508917522);
 
 pub trait VoxelTracer: Iterator<Item = (i32, i32, i32)> {
     fn new(start: (i32, i32, i32), end: (i32, i32, i32)) -> Self;
@@ -39,8 +51,11 @@ pub struct AmbientLight {
 pub fn simple_light_update<T: VoxelExt>(
     directional: Res<DirectionalLight>,
     ambient: Res<AmbientLight>,
+    mut diagnostics: ResMut<Diagnostics>,
     mut query: Query<(&mut Map<T>, &mut MapUpdates)>,
 ) {
+    let start = Instant::now();
+
     for (mut map, mut update) in &mut query.iter() {
         let mut remove = Vec::new();
         let mut insert = Vec::new();
@@ -103,31 +118,49 @@ pub fn simple_light_update<T: VoxelExt>(
             update.updates.insert(coords, u);
         }
     }
+
+    let end = Instant::now();
+    let duration = (end - start).as_secs_f64();
+    if diagnostics.get(LIGHT_UPDATE_DIAGNOSTIC).is_none() {
+        diagnostics.add(Diagnostic::new(LIGHT_UPDATE_DIAGNOSTIC, "light updates", 20));
+    }
+    diagnostics.add_measurement(LIGHT_UPDATE_DIAGNOSTIC, duration);
 }
 
 pub fn shaded_light_update<T: VoxelExt>(
     directional: Res<DirectionalLight>,
     ambient: Res<AmbientLight>,
+    mut diagnostics: ResMut<Diagnostics>,
     mut query: Query<(&mut Map<T>, &mut MapUpdates)>,
 ) {
+    let start = Instant::now();
+    
     for (mut map, mut update) in &mut query.iter() {
         let mut remove = Vec::new();
         let mut insert = Vec::new();
-        'outer: for (&(cx, cy, cz), update) in &update.updates {
+        let (tx, rx) = mpsc::channel();
+        update.updates.par_iter().for_each_with(tx, |tx_lm, (&(cx, cy, cz), update)| {
             match update {
                 ChunkUpdate::UpdateLight => {}
-                _ => continue,
+                _ => return,
             }
 
             let chunk = map.get((cx, cy, cz)).unwrap();
-
-            let mut light_map = vec![0.0; (chunk.width() + 2).pow(3)];
 
             let width = chunk.width() as i32;
 
             let lm_width = chunk.width() as i32 + 2;
 
-            for x in -1..lm_width - 1 {
+            let neighbour_top = map.get((cx, cy + width, cz));
+            let neighbour_bottom = map.get((cx, cy - width, cz));
+            let neighbour_left = map.get((cx + width, cy, cz));
+            let neighbour_right = map.get((cx - width, cy, cz));
+            let neighbour_front = map.get((cx, cy, cz + width));
+            let neighbour_back = map.get((cx, cy, cz - width));
+
+            let (tx, rx) = mpsc::channel();
+
+            (-1..lm_width - 1).into_par_iter().for_each_with(tx, |tx, x| {
                 for y in -1..lm_width - 1 {
                     for z in -1..lm_width - 1 {
                         let mut light = 0.0;
@@ -167,34 +200,27 @@ pub fn shaded_light_update<T: VoxelExt>(
                                         } else {
                                             0
                                         };
-                                        let cx = cx + width * sx;
-                                        let cy = cy + width * sy;
-                                        let cz = cz + width * sz;
-                                        if let Some(chunk) = map.get((cx, cy, cz)) {
-                                            let mut x = x;
-                                            let mut y = y;
-                                            let mut z = z;
+                                        let neighbour = match (sx, sy, sz) {
+                                            (1, 0, 0) => neighbour_left,
+                                            (-1, 0, 0) => neighbour_right,
+                                            (0, 1, 0) => neighbour_top,
+                                            (0, -1, 0) => neighbour_bottom,
+                                            (0, 0, 1) => neighbour_front,
+                                            (0, 0, -1) => neighbour_back,
+                                            _ => {
+                                                let cx = cx + width * sx;
+                                                let cy = cy + width * sy;
+                                                let cz = cz + width * sz;
+                                                map.get((cx, cy, cz))
+                                            }
+                                        };
+                                        if let Some(chunk) = neighbour {
                                             if !chunk.has_light() {
-                                                continue 'outer;
+                                                return;
                                             }
-                                            while x >= width {
-                                                x -= width;
-                                            }
-                                            while x < 0 {
-                                                x += width;
-                                            }
-                                            while y >= width {
-                                                y -= width;
-                                            }
-                                            while y < 0 {
-                                                y += width;
-                                            }
-                                            while z >= width {
-                                                z -= width;
-                                            }
-                                            while z < 0 {
-                                                z += width;
-                                            }
+                                            let x = x % width;
+                                            let y = y % width;
+                                            let z = z % width;
                                             if let Some(l) = chunk.light((x, y, z)) {
                                                 light += l;
                                                 count += 1;
@@ -213,15 +239,31 @@ pub fn shaded_light_update<T: VoxelExt>(
                             count = 1;
                         }
                         let light = light / count as f32;
-                        let idx = ((x + 1) * lm_width * lm_width) as usize
-                            + ((y + 1) * lm_width) as usize
-                            + (z + 1) as usize;
-                        light_map[idx] = light;
+                        tx.send(((x, y, z), light)).unwrap();
                     }
                 }
-            }
+            });
 
+            let mut light_map = rx.try_iter().collect::<Vec<_>>();
+            light_map.sort_unstable_by_key(|(coords, _)| *coords);
+
+            let light_map = light_map.into_iter().map(|(_, v)| v).collect::<Vec<_>>();
+
+            tx_lm.send(((cx, cy, cz), light_map)).unwrap();
+        });
+        
+        let light_maps = rx.try_iter().collect::<HashMap<_, _>>();
+
+        for (&(cx, cy, cz), update) in &update.updates {
+            match update {
+                ChunkUpdate::UpdateLight => {}
+                _ => continue,
+            }
+            
+            let light_map = &light_maps[&(cx, cy, cz)];
             let chunk = map.get_mut((cx, cy, cz)).unwrap();
+
+            let lm_width = chunk.width() as i32 + 2;
 
             let dir = -directional.direction;
 
@@ -316,12 +358,22 @@ pub fn shaded_light_update<T: VoxelExt>(
             update.updates.insert(coords, u);
         }
     }
+
+    let end = Instant::now();
+    let duration = (end - start).as_secs_f64();
+    if diagnostics.get(LIGHT_UPDATE_DIAGNOSTIC).is_none() {
+        diagnostics.add(Diagnostic::new(LIGHT_UPDATE_DIAGNOSTIC, "light updates", 20));
+    }
+    diagnostics.add_measurement(LIGHT_UPDATE_DIAGNOSTIC, duration);
 }
 
 pub fn light_map_update<T: VoxelExt, R: VoxelTracer>(
     directional: Res<DirectionalLight>,
+    mut diagnostics: ResMut<Diagnostics>,
     mut query: Query<(&mut Map<T>, &mut MapUpdates)>,
 ) {
+    let start = Instant::now();
+    
     for (mut map, mut update) in &mut query.iter() {
         let mut remove = Vec::new();
         let mut insert = Vec::new();
@@ -412,4 +464,11 @@ pub fn light_map_update<T: VoxelExt, R: VoxelTracer>(
             update.updates.insert(coords, u);
         }
     }
+    
+    let end = Instant::now();
+    let duration = (end - start).as_secs_f64();
+    if diagnostics.get(LIGHT_MAP_DIAGNOSTIC).is_none() {
+        diagnostics.add(Diagnostic::new(LIGHT_MAP_DIAGNOSTIC, "light map calculation", 20));
+    }
+    diagnostics.add_measurement(LIGHT_MAP_DIAGNOSTIC, duration);
 }

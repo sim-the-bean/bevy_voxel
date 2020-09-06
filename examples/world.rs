@@ -12,6 +12,7 @@ use bevy::{prelude::*, render::mesh::Mesh};
 use bevy_fly_camera::FlyCamera;
 
 use bevy_voxel::{
+    collections::lod_tree::Voxel,
     render::{
         entity::{generate_chunk_mesh, VoxelExt},
         light::*,
@@ -231,9 +232,11 @@ pub fn main() {
         .build();
     App::build()
         .add_default_plugins()
+        .add_plugin(bevy::diagnostic::FrameTimeDiagnosticsPlugin::default())
+        .add_plugin(bevy::diagnostic::PrintDiagnosticsPlugin::default())
         .add_plugin(VoxelRenderPlugin::default())
         .add_plugin(bevy_fly_camera::FlyCameraPlugin)
-        .add_startup_system(setup.system())
+        .add_startup_system(setup::<Block>.system())
         .add_resource(DirectionalLight {
             direction: Vec3::new(0.8, -1.0, 0.5).normalize(),
             intensity: 0.8,
@@ -254,16 +257,18 @@ pub fn main() {
             light_map_update::<Block, line_drawing::Bresenham3d<i32>>.system(),
         )
         .add_system_to_stage(stage::UPDATE, shaded_light_update::<Block>.system())
+        // .add_system_to_stage(stage::UPDATE, simple_light_update::<Block>.system())
         .add_system_to_stage(stage::POST_UPDATE, chunk_update::<Block>.system())
         .add_system_to_stage(stage::POST_UPDATE, save_game::<Block>.system())
         .run();
 }
 
 /// set up a simple 3D scene
-fn setup(mut commands: Commands) {
+fn setup<T: Voxel>(mut commands: Commands, params: Res<Program<T>>, mut height_map: ResMut<HeightMap>) {
     let mut update = MapUpdates::default();
     let chunk_size = 2_i32.pow(CHUNK_SIZE as u32);
     let world_width_2 = WORLD_WIDTH / chunk_size / 2;
+    let world_width_4 = world_width_2 / 2;
     let world_height = WORLD_HEIGHT / chunk_size;
 
     commands.spawn(FlyCamera {
@@ -306,9 +311,24 @@ fn setup(mut commands: Commands) {
             }
         }
     }
+    
+    let mut map = Vec::new();
+
+    for x in -world_width_4..world_width_4 {
+        for y in -1..world_height - 1 {
+            for z in -world_width_4..world_width_4 {
+                let x = x * chunk_size;
+                let y = y * chunk_size;
+                let z = z * chunk_size;
+                let chunk = params.execute(&mut height_map, (x, y, z));
+                map.push(chunk);
+                update.updates.insert((x, y, z), ChunkUpdate::UpdateLightMap);
+            }
+        }
+    }
     commands
         .spawn(MapComponents { map_update: update })
-        .with(Map::<Block>::default());
+        .with(Map::<T>::with_chunks(map));
 }
 
 fn chunk_update<T: VoxelExt>(

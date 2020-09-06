@@ -16,6 +16,7 @@ noise = "0.6"
 int_traits = "0.1"
 rstar = "0.8"
 either = "1.6"
+rayon = "1.4"
 
 [dependencies.bevy]
 path = "../bevy"
