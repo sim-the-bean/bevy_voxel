@@ -1,5 +1,5 @@
 #[cfg(feature = "savedata")]
-use std::path::Path;
+use std::{path::Path, fs::File};
 
 #[cfg(feature = "savedata")]
 use serde::{de::DeserializeOwned, Serialize};
@@ -332,6 +332,7 @@ pub struct ExitListenerState {
 
 #[cfg(feature = "savedata")]
 fn save_game<T: VoxelExt + Serialize + DeserializeOwned>(
+    params: Res<Program<T>>,
     mut state: ResMut<ExitListenerState>,
     exit_events: Res<Events<AppExit>>,
     mut query: Query<&Map<T>>,
@@ -345,6 +346,12 @@ fn save_game<T: VoxelExt + Serialize + DeserializeOwned>(
                     save_directory.display()
                 ));
             }
+            let mut params_file = save_directory.to_path_buf();
+            params_file.push("params.ron");
+            ron::ser::to_writer(File::create(&params_file).unwrap(), &*params).expect(&format!(
+                "couldn't save terrain gen params to {}",
+                params_file.display()
+            ));
         }
     }
 }
