@@ -548,30 +548,11 @@ impl<T: Voxel> From<RleTree<T>> for LodTree<T> {
         let mut len = 0;
         for node in tree {
             len += node.value.as_ref().map(|_| node.len).unwrap_or_default();
-            let mut remaining = node.len;
-            if node.len.is_power_of_two() && node.len.log2() % 3 == 0 {
-                let width = node.len.cbrt();
-                let idx = array.len();
-                array.push(Node::Value(node.value, width));
-                for _ in 1..node.len {
-                    array.push(Node::Ref(idx));
-                }
-            } else {
-                let next = node.len.next_power_of_two();
-                let iter = (0..next.log2()).rev()
-                    .filter_map(|idx| if idx % 3 == 0 { Some(idx) } else { None });
-                for i in iter {
-                    let part = 1 << i;
-                    while part <= remaining {
-                        let width = part.cbrt();
-                        let idx = array.len();
-                        array.push(Node::Value(node.value.clone(), width));
-                        for _ in 1..part {
-                            array.push(Node::Ref(idx));
-                        }
-                        remaining -= part;
-                    }
-                }
+            let width = node.len.cbrt();
+            let idx = array.len();
+            array.push(Node::Value(node.value, width));
+            for _ in 1..node.len {
+                array.push(Node::Ref(idx));
             }
         }
         Self {

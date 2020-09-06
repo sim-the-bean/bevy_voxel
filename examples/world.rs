@@ -24,7 +24,7 @@ use bevy_voxel::{
 };
 
 pub const CHUNK_SIZE: u32 = 5;
-pub const WORLD_WIDTH: i32 = 512;
+pub const WORLD_WIDTH: i32 = 128;
 pub const WORLD_HEIGHT: i32 = 96;
 
 pub fn main() {
@@ -242,7 +242,7 @@ fn setup(mut commands: Commands) {
         let save_directory: &Path = save_directory.as_ref();
         if save_directory.exists() {
             for cx in -world_width_2..world_width_2 {
-                for cy in 0..world_height {
+                for cy in -1..world_height - 1 {
                     for cz in -world_width_2..world_width_2 {
                         let x = cx * chunk_size;
                         let y = cy * chunk_size;
