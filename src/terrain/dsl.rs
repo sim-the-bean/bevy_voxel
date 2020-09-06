@@ -614,8 +614,10 @@ impl Default for Filter {
 pub struct Biome<T: Voxel> {
     pub(crate) name: Option<&'static str>,
     pub(crate) prob: f64,
+    pub(crate) height: f64,
     pub(crate) octaves: Vec<Octave>,
     pub(crate) layers: Vec<Layer<T>>,
+    pub(crate) water: Option<Layer<T>>,
     pub(crate) per_xz: Vec<Statement<T>>,
     pub(crate) per_chunk: Vec<Statement<T>>,
 }
@@ -625,8 +627,10 @@ impl<T: Voxel> Default for Biome<T> {
         Self {
             name: None,
             prob: 1.0,
+            height: 0.0,
             octaves: Vec::new(),
             layers: Vec::new(),
+            water: None,
             per_xz: Vec::new(),
             per_chunk: Vec::new(),
         }
@@ -660,6 +664,11 @@ impl<T: Voxel> BiomeBuilder<T> {
         self
     }
 
+    pub fn height(mut self, h: f64) -> Self {
+        self.inner.height = h;
+        self
+    }
+
     pub fn octave(mut self, o: Octave) -> Self {
         self.inner.octaves.push(o);
         self
@@ -667,6 +676,11 @@ impl<T: Voxel> BiomeBuilder<T> {
 
     pub fn layer(mut self, l: Layer<T>) -> Self {
         self.inner.layers.push(l);
+        self
+    }
+
+    pub fn water(mut self, l: Layer<T>) -> Self {
+        self.inner.water = Some(l);
         self
     }
 

@@ -1,5 +1,5 @@
 #[cfg(feature = "savedata")]
-use std::{fs::File, path::Path};
+use std::path::Path;
 
 #[cfg(feature = "savedata")]
 use serde::{de::DeserializeOwned, Serialize};
@@ -23,8 +23,8 @@ use bevy_voxel::{
     world::{ChunkUpdate, Map, MapComponents, MapUpdates},
 };
 
-pub const CHUNK_SIZE: u32 = 5;
-pub const WORLD_WIDTH: i32 = 128;
+pub const CHUNK_SIZE: u32 = 4;
+pub const WORLD_WIDTH: i32 = 256;
 pub const WORLD_HEIGHT: i32 = 96;
 
 pub fn main() {
@@ -36,6 +36,44 @@ pub fn main() {
         .subdivisions(1)
         .filter(Filter::Bilinear(2))
         .biome_frequency(0.001)
+        .biome(
+            Biome::build()
+                .name("ocean")
+                .spawn_probability(0.7)
+                .height(-8.0)
+                .octave(Octave::new(8.0, 0.01))
+                .octave(Octave::new(2.0, 0.05))
+                .octave(Octave::new(1.0, 0.10))
+                .layer(Layer::new(
+                    Block {
+                        color: Color::rgb(0.08, 0.08, 0.08),
+                        ..Default::default()
+                    },
+                    f64::INFINITY,
+                ))
+                .layer(Layer::new(
+                    Block {
+                        color: Color::rgb(0.5, 0.5, 0.5),
+                        ..Default::default()
+                    },
+                    16.0,
+                ))
+                .layer(Layer::new(
+                    Block {
+                        color: Color::rgb(0.76, 0.69, 0.5),
+                        ..Default::default()
+                    },
+                    1.0,
+                ))
+                .water(Layer::new(
+                    Block {
+                        color: Color::rgba(0.4, 0.8, 1.0, 0.5),
+                        ..Default::default()
+                    },
+                    0.0,
+                ))
+                .build(),
+        )
         .biome(
             Biome::build()
                 .name("plains")
@@ -71,6 +109,13 @@ pub fn main() {
                     },
                     1.0,
                 ))
+                .water(Layer::new(
+                    Block {
+                        color: Color::rgba(0.4, 0.8, 1.0, 0.5),
+                        ..Default::default()
+                    },
+                    0.0,
+                ))
                 .per_xz(
                     Expression::Ratio(3, 10)
                         .is_true()
@@ -87,6 +132,7 @@ pub fn main() {
             Biome::build()
                 .name("fields")
                 .spawn_probability(0.5)
+                .height(4.0)
                 .octave(Octave::new(8.0, 0.01))
                 .octave(Octave::new(2.0, 0.05))
                 .octave(Octave::new(1.0, 0.10))
@@ -118,6 +164,13 @@ pub fn main() {
                     },
                     1.0,
                 ))
+                .water(Layer::new(
+                    Block {
+                        color: Color::rgba(0.4, 0.8, 1.0, 0.5),
+                        ..Default::default()
+                    },
+                    0.0,
+                ))
                 .per_xz(
                     Expression::Ratio(4, 10)
                         .is_true()
@@ -134,6 +187,7 @@ pub fn main() {
             Biome::build()
                 .name("hills")
                 .spawn_probability(0.3)
+                .height(8.0)
                 .octave(Octave::new(24.0, 0.01))
                 .octave(Octave::new(2.0, 0.05))
                 .octave(Octave::new(1.0, 0.10))
@@ -164,6 +218,13 @@ pub fn main() {
                         ..Default::default()
                     },
                     1.0,
+                ))
+                .water(Layer::new(
+                    Block {
+                        color: Color::rgba(0.4, 0.8, 1.0, 0.5),
+                        ..Default::default()
+                    },
+                    0.0,
                 ))
                 .build(),
         )
@@ -268,14 +329,15 @@ fn chunk_update<T: VoxelExt>(
 
             let chunk = map.get((x, y, z)).unwrap();
 
-            let mesh = generate_chunk_mesh(&map, &chunk);
+            let (mesh, t_mesh) = generate_chunk_mesh(&map, &chunk);
 
             if let Some(mesh) = mesh {
                 let chunk = map.get_mut((x, y, z)).unwrap();
                 if let Some(e) = chunk.entity() {
                     *meshes.get_mut(&chunks.get(e).unwrap()).unwrap() = mesh;
                 } else {
-                    commands.spawn(ChunkRenderComponents {
+                    let e = Entity::new();
+                    commands.spawn_as_entity(e, ChunkRenderComponents {
                         mesh: meshes.add(mesh),
                         material: materials.add(VoxelMaterial {
                             albedo: Color::WHITE,
@@ -283,6 +345,25 @@ fn chunk_update<T: VoxelExt>(
                         translation: Translation::new(x as f32, y as f32, z as f32),
                         ..Default::default()
                     });
+                    chunk.set_entity(e);
+                }
+            }
+            
+            if let Some(mesh) = t_mesh {
+                let chunk = map.get_mut((x, y, z)).unwrap();
+                if let Some(e) = chunk.transparent_entity() {
+                    *meshes.get_mut(&chunks.get(e).unwrap()).unwrap() = mesh;
+                } else {
+                    let e = Entity::new();
+                    commands.spawn_as_entity(e, ChunkRenderComponents {
+                        mesh: meshes.add(mesh),
+                        material: materials.add(VoxelMaterial {
+                            albedo: Color::WHITE,
+                        }),
+                        translation: Translation::new(x as f32, y as f32, z as f32),
+                        ..Default::default()
+                    });
+                    chunk.set_transparent_entity(e);
                 }
             }
         }
@@ -300,7 +381,6 @@ pub struct ExitListenerState {
 
 #[cfg(feature = "savedata")]
 fn save_game<T: VoxelExt + Serialize + DeserializeOwned>(
-    params: Res<Program<T>>,
     mut state: ResMut<ExitListenerState>,
     exit_events: Res<Events<AppExit>>,
     mut query: Query<&Map<T>>,
@@ -314,12 +394,6 @@ fn save_game<T: VoxelExt + Serialize + DeserializeOwned>(
                     save_directory.display()
                 ));
             }
-            let mut params_file = save_directory.to_path_buf();
-            params_file.push("params.ron");
-            ron::ser::to_writer(File::create(&params_file).unwrap(), &*params).expect(&format!(
-                "couldn't save terrain gen params to {}",
-                params_file.display()
-            ));
         }
     }
 }

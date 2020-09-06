@@ -8,7 +8,7 @@ use crate::serialize::SerDePartialEq;
 
 use crate::{
     collections::lod_tree::Voxel,
-    render::entity::{Face, MeshPart, VoxelExt},
+    render::entity::{Face, MeshPart, VoxelExt, Transparent},
     world::{Chunk, Map},
 };
 
@@ -73,7 +73,11 @@ pub struct Block {
 
 impl Block {
     pub fn solid(&self) -> bool {
-        self.mesh_type == MeshType::Cube
+        self.mesh_type == MeshType::Cube && self.color.a == 1.0
+    }
+    
+    pub fn transparent(&self) -> bool {
+        self.color.a < 1.0
     }
 
     fn mesh_cube(
@@ -137,11 +141,14 @@ impl Block {
             colors.extend(&c);
         }
 
+        let transparent = self.color.a < 1.0;
+
         MeshPart {
             positions,
             shades,
             colors,
             indices,
+            transparent: Transparent::from(transparent),
         }
     }
 
@@ -192,12 +199,15 @@ impl Block {
         let indices = vec![
             0, 1, 2, 2, 3, 0, 4, 5, 6, 6, 7, 4, 8, 9, 10, 10, 11, 8, 12, 13, 14, 14, 15, 12,
         ];
+        
+        let transparent = self.color.a < 1.0;
 
         MeshPart {
             positions,
             shades,
             colors,
             indices,
+            transparent: Transparent::from(transparent),
         }
     }
 }
@@ -312,7 +322,7 @@ fn generate_front_side(
                 if let Some(chunk) = map.get((cx, cy, cz)) {
                     !chunk
                         .get((x + dx, y + dy, 0))
-                        .map(|block| block.solid())
+                        .map(|other| block.solid() && other.solid() || block.transparent() && other.transparent())
                         .unwrap_or(false)
                 } else {
                     false
@@ -320,7 +330,7 @@ fn generate_front_side(
             } else {
                 !chunk
                     .get((x + dx, y + dy, z + width))
-                    .map(|block| block.solid())
+                    .map(|other| block.solid() && other.solid() || block.transparent() && other.transparent())
                     .unwrap_or(false)
             };
             if render {
@@ -375,7 +385,7 @@ fn generate_back_side(
                 if let Some(chunk) = map.get((cx, cy, cz)) {
                     !chunk
                         .get((x + dx, y + dy, cw - 1))
-                        .map(|block| block.solid())
+                        .map(|other| block.solid() && other.solid() || block.transparent() && other.transparent())
                         .unwrap_or(false)
                 } else {
                     false
@@ -383,7 +393,7 @@ fn generate_back_side(
             } else {
                 !chunk
                     .get((x + dx, y + dy, z - 1))
-                    .map(|block| block.solid())
+                    .map(|other| block.solid() && other.solid() || block.transparent() && other.transparent())
                     .unwrap_or(false)
             };
             if render {
@@ -438,7 +448,7 @@ fn generate_right_side(
                 if let Some(chunk) = map.get((cx, cy, cz)) {
                     !chunk
                         .get((cw - 1, y + dy, z + dz))
-                        .map(|block| block.solid())
+                        .map(|other| block.solid() && other.solid() || block.transparent() && other.transparent())
                         .unwrap_or(false)
                 } else {
                     false
@@ -446,7 +456,7 @@ fn generate_right_side(
             } else {
                 !chunk
                     .get((x - 1, y + dy, z + dz))
-                    .map(|block| block.solid())
+                    .map(|other| block.solid() && other.solid() || block.transparent() && other.transparent())
                     .unwrap_or(false)
             };
             if render {
@@ -501,7 +511,7 @@ fn generate_left_side(
                 if let Some(chunk) = map.get((cx, cy, cz)) {
                     !chunk
                         .get((0, y + dy, z + dz))
-                        .map(|block| block.solid())
+                        .map(|other| block.solid() && other.solid() || block.transparent() && other.transparent())
                         .unwrap_or(false)
                 } else {
                     false
@@ -509,7 +519,7 @@ fn generate_left_side(
             } else {
                 !chunk
                     .get((x + width, y + dy, z + dz))
-                    .map(|block| block.solid())
+                    .map(|other| block.solid() && other.solid() || block.transparent() && other.transparent())
                     .unwrap_or(false)
             };
             if render {
@@ -564,7 +574,7 @@ fn generate_top_side(
                 if let Some(chunk) = map.get((cx, cy, cz)) {
                     !chunk
                         .get((x + dx, 0, z + dz))
-                        .map(|block| block.solid())
+                        .map(|other| block.solid() && other.solid() || block.transparent() && other.transparent())
                         .unwrap_or(false)
                 } else {
                     false
@@ -572,7 +582,7 @@ fn generate_top_side(
             } else {
                 !chunk
                     .get((x + dx, y + width, z + dz))
-                    .map(|block| block.solid())
+                    .map(|other| block.solid() && other.solid() || block.transparent() && other.transparent())
                     .unwrap_or(false)
             };
             if render {
@@ -627,7 +637,7 @@ fn generate_bottom_side(
                 if let Some(chunk) = map.get((cx, cy, cz)) {
                     !chunk
                         .get((x + dx, cw - 1, z + dz))
-                        .map(|block| block.solid())
+                        .map(|other| block.solid() && other.solid() || block.transparent() && other.transparent())
                         .unwrap_or(false)
                 } else {
                     false
@@ -635,7 +645,7 @@ fn generate_bottom_side(
             } else {
                 !chunk
                     .get((x + dx, y - 1, z + dz))
-                    .map(|block| block.solid())
+                    .map(|other| block.solid() && other.solid() || block.transparent() && other.transparent())
                     .unwrap_or(false)
             };
             if render {

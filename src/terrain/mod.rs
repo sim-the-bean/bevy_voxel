@@ -19,15 +19,17 @@ pub struct HeightChunk {
     width: usize,
     filter: Filter,
     array: Vec<f32>,
+    water: Vec<Option<f32>>,
 }
 
 impl HeightChunk {
-    pub fn new(position: (i32, i32), width: usize, filter: Filter, array: Vec<f32>) -> Self {
+    pub fn new(position: (i32, i32), width: usize, filter: Filter, array: Vec<f32>, water: Vec<Option<f32>>) -> Self {
         Self {
             position,
             width,
             filter,
             array,
+            water,
         }
     }
 
@@ -134,6 +136,8 @@ impl<T: Voxel> Program<T> {
         let a = self.filter.aux_width();
         let mut chunk =
             Vec::with_capacity((self.chunk_width() / self.filter.as_usize() + a as usize).pow(2));
+        let mut water =
+            Vec::with_capacity((self.chunk_width() / self.filter.as_usize() + a as usize).pow(2));
 
         let noise = N::default().set_seed(self.seed);
         let unit_width = self.unit_width() as i32;
@@ -170,12 +174,22 @@ impl<T: Voxel> Program<T> {
                 let fz = az as f64;
                 let biome = biome_map[(x * (size + a) + z) as usize];
                 let biome = &self.biomes[biome];
-                let mut height = 0.0;
+                let mut height = biome.height;
                 for octave in &biome.octaves {
                     height += noise.get([fx * octave.frequency, fz * octave.frequency])
                         * octave.amplitude;
                 }
                 chunk.push(height as f32);
+                if let Some(water_layer) = &biome.water {
+                    if water_layer.height > height {
+                        let water_height = water_layer.height;
+                        water.push(Some(water_height as f32))
+                    } else {
+                        water.push(None)
+                    }
+                } else {
+                    water.push(None)
+                }
             }
         }
 
@@ -184,6 +198,7 @@ impl<T: Voxel> Program<T> {
             self.chunk_width().div_euclid(self.filter.as_usize()) + a as usize,
             self.filter,
             chunk,
+            water,
         )
     }
 
@@ -220,7 +235,7 @@ pub fn terrain_generation<T: Voxel>(
     mut height_map: ResMut<HeightMap>,
     mut query: Query<(&mut Map<T>, &mut MapUpdates)>,
 ) {
-    let max_count = 1;
+    let max_count = 4;
     let mut count = 0;
     for (mut map, mut map_update) in &mut query.iter() {
         let mut remove = Vec::new();
@@ -328,6 +343,29 @@ fn terrain_gen2_impl<T: Voxel, N: NoiseFn<[f64; 2]> + Seedable + Default>(
                         for iy in 0..params.unit_width() as i32 {
                             for iz in 0..params.unit_width() as i32 {
                                 chunk.insert((x + ix, y + iy, z + iz), layer.block.clone());
+                            }
+                        }
+                    }
+                }
+            }
+
+            if let Some(water) = &biome.water {
+                let y = height as i32 - by;
+                let w = water.height as i32 - by;
+                for y in y..w {
+                    if y >= size {
+                        break;
+                    }
+                    if y < 0 {
+                        continue;
+                    }
+                    let x = x << params.subdivisions;
+                    let y = y << params.subdivisions;
+                    let z = z << params.subdivisions;
+                    for ix in 0..params.unit_width() as i32 {
+                        for iy in 0..params.unit_width() as i32 {
+                            for iz in 0..params.unit_width() as i32 {
+                                chunk.insert((x + ix, y + iy, z + iz), water.block.clone());
                             }
                         }
                     }

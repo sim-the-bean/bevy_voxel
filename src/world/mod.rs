@@ -35,6 +35,7 @@ pub struct Chunk<T> {
     light: LodTree<f32>,
     has_light: bool,
     entity: Option<Entity>,
+    t_entity: Option<Entity>,
 }
 
 impl<T: Voxel> Chunk<T> {
@@ -48,6 +49,7 @@ impl<T: Voxel> Chunk<T> {
             light,
             has_light: false,
             entity: None,
+            t_entity: None,
         }
     }
 
@@ -57,6 +59,14 @@ impl<T: Voxel> Chunk<T> {
 
     pub fn set_entity(&mut self, e: Entity) {
         self.entity = Some(e);
+    }
+
+    pub fn transparent_entity(&self) -> Option<Entity> {
+        self.t_entity
+    }
+
+    pub fn set_transparent_entity(&mut self, e: Entity) {
+        self.t_entity = Some(e);
     }
 
     pub fn has_light(&self) -> bool {
@@ -159,6 +169,7 @@ impl<T: Voxel> From<SaveData<T>> for Chunk<T> {
             light: LodTree::new(width),
             has_light: false,
             entity: None,
+            t_entity: None,
         }
     }
 }
