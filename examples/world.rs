@@ -35,11 +35,68 @@ pub fn main() {
     	.chunk_size(CHUNK_SIZE)
     	.subdivisions(1)
     	.filter(Filter::Bilinear(2))
-        .biome_frequency(0.1)
+        .biome_frequency(0.001)
         .biome(
             Biome::build()
                 .name("plains")
-                .spawn_probability(1.0)
+                .spawn_probability(0.5)
+                .octave(Octave::new(8.0, 0.01))
+                .octave(Octave::new(2.0, 0.05))
+                .octave(Octave::new(1.0, 0.10))
+                .layer(
+                    Layer::new(
+                        Block {
+                            color: Color::rgb(0.08, 0.08, 0.08),
+                            ..Default::default()
+                        },
+                        f64::INFINITY,
+                    )
+                )
+                .layer(
+                    Layer::new(
+                        Block {
+                            color: Color::rgb(0.5, 0.5, 0.5),
+                            ..Default::default()
+                        },
+                        16.0,
+                    )
+                )
+                .layer(
+                    Layer::new(
+                        Block {
+                            color: Color::rgb(0.396, 0.263, 0.129),
+                            ..Default::default()
+                        },
+                        3.0,
+                    )
+                )
+                .layer(
+                    Layer::new(
+                        Block {
+                            color: Color::rgb(0.0, 0.416, 0.306),
+                            ..Default::default()
+                        },
+                        1.0,
+                    )
+                )
+                .per_xz(
+                    Expression::Ratio(3, 10)
+                        .is_true()
+                        .and_then(BlockQuery::y_top())
+                        .set_block(
+                            Block {
+                                color: Color::rgb(0.0, 0.6, 0.2),
+                                mesh_type: MeshType::Cross,
+                                ..Default::default()
+                            }
+                        )
+                )
+                .build()
+        )
+        .biome(
+            Biome::build()
+                .name("fields")
+                .spawn_probability(0.5)
                 .octave(Octave::new(8.0, 0.01))
                 .octave(Octave::new(2.0, 0.05))
                 .octave(Octave::new(1.0, 0.10))
@@ -85,7 +142,7 @@ pub fn main() {
                         .and_then(BlockQuery::y_top())
                         .set_block(
                             Block {
-                                color: Color::rgb(0.0, 0.6, 0.2),
+                                color: Color::rgb(0.6, 0.6, 0.2),
                                 mesh_type: MeshType::Cross,
                                 ..Default::default()
                             }

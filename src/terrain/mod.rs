@@ -135,14 +135,14 @@ impl<T: Voxel> Program<T> {
             for z in 0..size + a {
                 let az = cz + z * unit_width * self.filter.as_i32();
                 let fz = az as f64;
-                let height = noise.get([fx * self.biome_frequency, fz * self.biome_frequency]) * 0.5 + 0.5;
+                let mut height = noise.get([fx * self.biome_frequency, fz * self.biome_frequency]) * 0.5 + 0.5;
                 let mut idx = 0_usize;
-                // FIXME
                 for (i, biome) in self.biomes.iter().enumerate() {
                     if height < biome.prob {
                         idx = i;
                         break;
                     }
+                    height -= biome.prob;
                 }
                 biome_map.push(idx);
             }
@@ -269,14 +269,14 @@ fn terrain_gen2_impl<T: Voxel, N: NoiseFn<[f64; 2]> + Seedable + Default>(
         for z in 0..size {
             let az = cz + z * unit_width * params.filter.as_i32();
             let fz = az as f64;
-            let height = noise.get([fx * params.biome_frequency, fz * params.biome_frequency]) * 0.5 + 0.5;
+            let mut height = noise.get([fx * params.biome_frequency, fz * params.biome_frequency]) * 0.5 + 0.5;
             let mut idx = 0_usize;
-            // FIXME
             for (i, biome) in params.biomes.iter().enumerate() {
                 if height < biome.prob {
                     idx = i;
                     break;
                 }
+                height -= biome.prob;
             }
             biome_map.push(idx);
         }

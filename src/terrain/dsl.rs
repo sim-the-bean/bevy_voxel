@@ -706,6 +706,7 @@ impl<T: Voxel> ProgramBuilder<T> {
         for biome in &mut self.inner.biomes {
             biome.prob /= sum;
         }
+        self.inner.biomes.sort_unstable_by(|a, b| a.prob.partial_cmp(&b.prob).unwrap_or(Ordering::Equal));
         self.inner
     }
     
