@@ -7,7 +7,11 @@ use serde::{de::DeserializeOwned, Serialize};
 #[cfg(feature = "savedata")]
 use bevy::app::AppExit;
 
-use bevy::{prelude::*, render::mesh::Mesh};
+use bevy::{
+    prelude::*,
+    render::mesh::Mesh,
+    render::{camera::ActiveCameras, render_graph::base},
+};
 
 use bevy_fly_camera::FlyCamera;
 
@@ -252,12 +256,13 @@ pub fn main() {
             terrain_generation::<Block>.system(),
         )
         .add_system_to_stage("stage_lod_update", lod_update::<Block>.system())
+        .add_system_to_stage(stage::UPDATE, infinite_update::<Block>.system())
         .add_system_to_stage(
             stage::UPDATE,
             light_map_update::<Block, line_drawing::Bresenham3d<i32>>.system(),
         )
         .add_system_to_stage(stage::UPDATE, shaded_light_update::<Block>.system())
-        // .add_system_to_stage(stage::UPDATE, simple_light_update::<Block>.system())
+        //.add_system_to_stage(stage::UPDATE, simple_light_update::<Block>.system())
         .add_system_to_stage(stage::POST_UPDATE, chunk_update::<Block>.system())
         .add_system_to_stage(stage::POST_UPDATE, save_game::<Block>.system())
         .run();
@@ -268,7 +273,6 @@ fn setup<T: Voxel>(mut commands: Commands, params: Res<Program<T>>, mut height_m
     let mut update = MapUpdates::default();
     let chunk_size = 2_i32.pow(CHUNK_SIZE as u32);
     let world_width_2 = WORLD_WIDTH / chunk_size / 2;
-    let world_width_4 = world_width_2 / 2;
     let world_height = WORLD_HEIGHT / chunk_size;
 
     commands.spawn(FlyCamera {
@@ -314,9 +318,9 @@ fn setup<T: Voxel>(mut commands: Commands, params: Res<Program<T>>, mut height_m
     
     let mut map = Vec::new();
 
-    for x in -world_width_4..world_width_4 {
+    for x in -world_width_2..world_width_2 {
         for y in -1..world_height - 1 {
-            for z in -world_width_4..world_width_4 {
+            for z in -world_width_2..world_width_2 {
                 let x = x * chunk_size;
                 let y = y * chunk_size;
                 let z = z * chunk_size;
@@ -389,6 +393,43 @@ fn chunk_update<T: VoxelExt>(
         }
         for coords in remove {
             update.updates.remove(&coords);
+        }
+    }
+}
+
+pub fn infinite_update<T: Voxel>(
+    camera: Res<ActiveCameras>,
+    mut query: Query<(&Map<T>, &mut MapUpdates)>,
+    translation: Query<&Translation>,
+) {
+    let (camera_x, camera_z) = if let Some(camera) = camera.get(base::camera::CAMERA3D) {
+        let position = translation.get::<Translation>(camera).unwrap();
+        (
+            position.0.x() as i32,
+            position.0.z() as i32,
+        )
+    } else {
+        (0, 0)
+    };
+    
+    let range = 8;
+    let chunk_size = 2_i32.pow(CHUNK_SIZE as u32);
+    let world_height = WORLD_HEIGHT / chunk_size;
+    
+    for (map, mut update) in &mut query.iter() {
+        let x = camera_x / chunk_size;
+        let z = camera_z / chunk_size;
+        for x in x - range..=x + range {
+            for z in z - range..=z + range {
+                for y in -1..world_height - 1 {
+                    let x = x * chunk_size;
+                    let y = y * chunk_size;
+                    let z = z * chunk_size;
+                    if map.get((x, y, z)).is_none() {
+                        update.updates.insert((x, y, z), ChunkUpdate::GenerateChunk);
+                    }
+                }
+            }
         }
     }
 }

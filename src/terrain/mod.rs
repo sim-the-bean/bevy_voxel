@@ -245,7 +245,7 @@ pub fn terrain_generation<T: Voxel>(
 ) {
     let start = Instant::now();
     
-    let max_count = 8;
+    let max_count = 32;
     let mut count = 0;
     for (mut map, mut map_update) in &mut query.iter() {
         let mut remove = Vec::new();
