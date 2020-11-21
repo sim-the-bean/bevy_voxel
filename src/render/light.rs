@@ -56,7 +56,7 @@ pub fn simple_light_update<T: VoxelExt>(
 ) {
     let start = Instant::now();
 
-    for (mut map, mut update) in &mut query.iter() {
+    for (mut map, mut update) in &mut query.iter_mut() {
         let mut remove = Vec::new();
         let mut insert = Vec::new();
         for (&(x, y, z), update) in &update.updates {
@@ -135,7 +135,7 @@ pub fn shaded_light_update<T: VoxelExt>(
 ) {
     let start = Instant::now();
     
-    for (mut map, mut update) in &mut query.iter() {
+    for (mut map, mut update) in &mut query.iter_mut() {
         let mut remove = Vec::new();
         let mut insert = Vec::new();
         let (tx, rx) = mpsc::channel();
@@ -374,7 +374,7 @@ pub fn light_map_update<T: VoxelExt, R: VoxelTracer>(
 ) {
     let start = Instant::now();
     
-    for (mut map, mut update) in &mut query.iter() {
+    for (mut map, mut update) in query.iter_mut() {
         let mut remove = Vec::new();
         let mut insert = Vec::new();
         for (&(cx, cy, cz), update) in &update.updates {

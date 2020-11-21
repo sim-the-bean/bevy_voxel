@@ -6,7 +6,7 @@ use bevy::{
         render_graph::{base, AssetRenderResourcesNode, RenderGraph, RenderResourcesNode},
         shader::Shader,
     },
-    transform::prelude::Transform,
+    transform::prelude::GlobalTransform,
 };
 
 use super::material::VoxelMaterial;
@@ -21,7 +21,7 @@ pub mod node {
 pub mod uniform {}
 
 pub(crate) fn add_voxel_graph(graph: &mut RenderGraph, resources: &Resources) {
-    graph.add_system_node(node::TRANSFORM, RenderResourcesNode::<Transform>::new(true));
+    graph.add_system_node(node::TRANSFORM, RenderResourcesNode::<GlobalTransform>::new(true));
     graph
         .add_node_edge(node::TRANSFORM, base::node::MAIN_PASS)
         .unwrap();

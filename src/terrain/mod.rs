@@ -247,7 +247,7 @@ pub fn terrain_generation<T: Voxel>(
     
     let max_count = 32;
     let mut count = 0;
-    for (mut map, mut map_update) in &mut query.iter() {
+    for (mut map, mut map_update) in query.iter_mut() {
         let mut remove = Vec::new();
         let mut insert = Vec::new();
         for (&(x, y, z), update) in &map_update.updates {

@@ -1,13 +1,14 @@
 use bevy::{
+    prelude::*,
     asset::Handle,
     ecs::Bundle,
     render::{
         draw::Draw,
-        mesh::Mesh,
-        pipeline::{DynamicBinding, PipelineSpecialization, RenderPipeline, RenderPipelines},
+        mesh::*,
+        pipeline::{DynamicBinding, PipelineSpecialization, PrimitiveTopology, RenderPipeline, RenderPipelines},
         render_graph::base::MainPass,
     },
-    transform::prelude::{Rotation, Scale, Transform, Translation},
+    transform::prelude::{Transform},
 };
 
 use crate::{
@@ -76,9 +77,6 @@ pub struct ChunkRenderComponents {
     pub draw: Draw,
     pub render_pipelines: RenderPipelines,
     pub transform: Transform,
-    pub translation: Translation,
-    pub rotation: Rotation,
-    pub scale: Scale,
 }
 
 impl Default for ChunkRenderComponents {
@@ -107,9 +105,6 @@ impl Default for ChunkRenderComponents {
             main_pass: Default::default(),
             draw: Default::default(),
             transform: Default::default(),
-            translation: Default::default(),
-            rotation: Default::default(),
-            scale: Default::default(),
         }
     }
 }
@@ -156,47 +151,25 @@ pub fn generate_chunk_mesh<T: VoxelExt>(map: &Map<T>, chunk: &Chunk<T>) -> (Opti
     let mesh = if positions.is_empty() {
         None
     } else {
-        Some(Mesh {
-            primitive_topology: bevy::render::pipeline::PrimitiveTopology::TriangleList,
-            attributes: vec![
-                bevy::render::mesh::VertexAttribute {
-                    name: From::from("Voxel_Position"),
-                    values: bevy::render::mesh::VertexAttributeValues::Float3(positions),
-                },
-                bevy::render::mesh::VertexAttribute {
-                    name: From::from("Voxel_Shade"),
-                    values: bevy::render::mesh::VertexAttributeValues::Float(shades),
-                },
-                bevy::render::mesh::VertexAttribute {
-                    name: From::from("Voxel_Color"),
-                    values: bevy::render::mesh::VertexAttributeValues::Float4(colors),
-                },
-            ],
-            indices: Some(indices),
-        })
+        let mut mesh = Mesh::new(PrimitiveTopology::TriangleList);
+        mesh.set_indices(Some(Indices::U32(indices)));
+        mesh.set_attribute("Voxel_Position", VertexAttributeValues::Float3(positions));
+        mesh.set_attribute("Voxel_Shade", VertexAttributeValues::Float(shades));
+        mesh.set_attribute("Voxel_Color", VertexAttributeValues::Float4(colors));
+
+        Some(mesh)
     };
     
     let t_mesh = if t_positions.is_empty() {
         None
     } else {
-        Some(Mesh {
-            primitive_topology: bevy::render::pipeline::PrimitiveTopology::TriangleList,
-            attributes: vec![
-                bevy::render::mesh::VertexAttribute {
-                    name: From::from("Voxel_Position"),
-                    values: bevy::render::mesh::VertexAttributeValues::Float3(t_positions),
-                },
-                bevy::render::mesh::VertexAttribute {
-                    name: From::from("Voxel_Shade"),
-                    values: bevy::render::mesh::VertexAttributeValues::Float(t_shades),
-                },
-                bevy::render::mesh::VertexAttribute {
-                    name: From::from("Voxel_Color"),
-                    values: bevy::render::mesh::VertexAttributeValues::Float4(t_colors),
-                },
-            ],
-            indices: Some(t_indices),
-        })
+        let mut mesh = Mesh::new(PrimitiveTopology::TriangleList);
+        mesh.set_indices(Some(Indices::U32(t_indices)));
+        mesh.set_attribute("Voxel_Position", VertexAttributeValues::Float3(t_positions));
+        mesh.set_attribute("Voxel_Shade", VertexAttributeValues::Float(t_shades));
+        mesh.set_attribute("Voxel_Color", VertexAttributeValues::Float4(t_colors));
+
+        Some(mesh)
     };
 
     (mesh, t_mesh)

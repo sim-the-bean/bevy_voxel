@@ -11,8 +11,9 @@ use bevy::{
         texture::TextureFormat,
     },
 };
+use uuid::Uuid;
 
-pub const PIPELINE_HANDLE: Handle<PipelineDescriptor> = Handle::from_bytes(*b"voxelpipeline000");
+pub const PIPELINE_HANDLE: Handle<PipelineDescriptor> = Handle::weak_from_u64(Uuid::from_bytes(*b"voxelpipeline000"), 1);
 
 pub(crate) fn build_pipeline(shaders: &mut Assets<Shader>) -> PipelineDescriptor {
     PipelineDescriptor {

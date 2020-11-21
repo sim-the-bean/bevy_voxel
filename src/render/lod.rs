@@ -1,7 +1,7 @@
 use bevy::{
     prelude::*,
     render::{camera::ActiveCameras, render_graph::base},
-    transform::prelude::Translation,
+    transform::prelude::Transform,
 };
 
 use crate::{collections::lod_tree::Voxel, world::{Map, MapUpdates, ChunkUpdate}};
@@ -9,19 +9,19 @@ use crate::{collections::lod_tree::Voxel, world::{Map, MapUpdates, ChunkUpdate}}
 pub fn lod_update<T: Voxel>(
     camera: Res<ActiveCameras>,
     mut query: Query<(&mut Map<T>, &mut MapUpdates)>,
-    translation: Query<&Translation>,
+    transform: Query<&Transform>,
 ) {
     let (camera_x, camera_y, camera_z) = if let Some(camera) = camera.get(base::camera::CAMERA3D) {
-        let position = translation.get::<Translation>(camera).unwrap();
+        let position = transform.get(camera).unwrap();
         (
-            position.0.x() as i32,
-            position.0.y() as i32,
-            position.0.z() as i32,
+            position.translation.x() as i32,
+            position.translation.y() as i32,
+            position.translation.z() as i32,
         )
     } else {
         (0, 0, 0)
     };
-    for (mut map, mut update) in &mut query.iter() {
+    for (mut map, mut update) in query.iter_mut() {
         for chunk in &mut map.iter_mut() {
             let (x, y, z) = chunk.position();
             let lod = ((camera_x - x).abs() / 128)

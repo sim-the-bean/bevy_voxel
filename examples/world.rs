@@ -235,7 +235,7 @@ pub fn main() {
         )
         .build();
     App::build()
-        .add_default_plugins()
+        .add_plugins(DefaultPlugins)
         .add_plugin(bevy::diagnostic::FrameTimeDiagnosticsPlugin::default())
         .add_plugin(bevy::diagnostic::PrintDiagnosticsPlugin::default())
         .add_plugin(VoxelRenderPlugin::default())
@@ -275,10 +275,12 @@ fn setup<T: Voxel>(mut commands: Commands, params: Res<Program<T>>, mut height_m
     let world_width_2 = WORLD_WIDTH / chunk_size / 2;
     let world_height = WORLD_HEIGHT / chunk_size;
 
-    commands.spawn(FlyCamera {
-        translation: Translation::new(0.0, WORLD_HEIGHT as f32 - chunk_size as f32, 0.0),
-        ..Default::default()
-    });
+    commands
+        .spawn(Camera3dComponents {
+            transform: Transform::from_translation(Vec3::new(0.0, WORLD_HEIGHT as f32 - chunk_size as f32, 0.0)),
+            ..Default::default()
+        })
+        .with(FlyCamera::default());
 
     if let Some(save_directory) = std::env::args().skip(1).next() {
         let save_directory: &Path = save_directory.as_ref();
@@ -340,9 +342,9 @@ fn chunk_update<T: VoxelExt>(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<VoxelMaterial>>,
     mut maps: Query<(&mut Map<T>, &mut MapUpdates)>,
-    chunks: Query<&Handle<Mesh>>,
+    chunks: Query<&Handle<Mesh>>
 ) {
-    for (mut map, mut update) in &mut maps.iter() {
+    for (mut map, mut update) in &mut maps.iter_mut() {
         let mut remove = Vec::new();
         for (&(x, y, z), update) in &update.updates {
             match update {
@@ -358,36 +360,34 @@ fn chunk_update<T: VoxelExt>(
             if let Some(mesh) = mesh {
                 let chunk = map.get_mut((x, y, z)).unwrap();
                 if let Some(e) = chunk.entity() {
-                    *meshes.get_mut(&chunks.get(e).unwrap()).unwrap() = mesh;
+                    *meshes.get_mut(chunks.get(e).unwrap()).unwrap() = mesh;
                 } else {
-                    let e = Entity::new();
-                    commands.spawn_as_entity(e, ChunkRenderComponents {
+                    commands.spawn(ChunkRenderComponents {
                         mesh: meshes.add(mesh),
                         material: materials.add(VoxelMaterial {
                             albedo: Color::WHITE,
                         }),
-                        translation: Translation::new(x as f32, y as f32, z as f32),
+                        transform: Transform::from_translation(Vec3::new(x as f32, y as f32, z as f32)),
                         ..Default::default()
                     });
-                    chunk.set_entity(e);
+                    chunk.set_entity(commands.current_entity().unwrap());
                 }
             }
             
             if let Some(mesh) = t_mesh {
                 let chunk = map.get_mut((x, y, z)).unwrap();
                 if let Some(e) = chunk.transparent_entity() {
-                    *meshes.get_mut(&chunks.get(e).unwrap()).unwrap() = mesh;
+                    *meshes.get_mut(chunks.get(e).unwrap()).unwrap() = mesh;
                 } else {
-                    let e = Entity::new();
-                    commands.spawn_as_entity(e, ChunkRenderComponents {
+                    commands.spawn(ChunkRenderComponents {
                         mesh: meshes.add(mesh),
                         material: materials.add(VoxelMaterial {
                             albedo: Color::WHITE,
                         }),
-                        translation: Translation::new(x as f32, y as f32, z as f32),
+                        transform: Transform::from_translation(Vec3::new(x as f32, y as f32, z as f32)),
                         ..Default::default()
                     });
-                    chunk.set_transparent_entity(e);
+                    chunk.set_transparent_entity(commands.current_entity().unwrap());
                 }
             }
         }
@@ -400,13 +400,13 @@ fn chunk_update<T: VoxelExt>(
 pub fn infinite_update<T: Voxel>(
     camera: Res<ActiveCameras>,
     mut query: Query<(&Map<T>, &mut MapUpdates)>,
-    translation: Query<&Translation>,
+    transform: Query<&Transform>
 ) {
     let (camera_x, camera_z) = if let Some(camera) = camera.get(base::camera::CAMERA3D) {
-        let position = translation.get::<Translation>(camera).unwrap();
+        let position = transform.get(camera).unwrap();
         (
-            position.0.x() as i32,
-            position.0.z() as i32,
+            position.translation.x() as i32,
+            position.translation.z() as i32,
         )
     } else {
         (0, 0)
@@ -416,7 +416,7 @@ pub fn infinite_update<T: Voxel>(
     let chunk_size = 2_i32.pow(CHUNK_SIZE as u32);
     let world_height = WORLD_HEIGHT / chunk_size;
     
-    for (map, mut update) in &mut query.iter() {
+    for (map, mut update) in query.iter_mut() {
         let x = camera_x / chunk_size;
         let z = camera_z / chunk_size;
         for x in x - range..=x + range {
@@ -449,7 +449,7 @@ fn save_game<T: VoxelExt + Serialize + DeserializeOwned>(
     if let Some(_) = state.reader.iter(&exit_events).next() {
         if let Some(save_directory) = std::env::args().skip(1).next() {
             let save_directory: &Path = save_directory.as_ref();
-            for map in &mut query.iter() {
+            for map in query.iter_mut() {
                 map.save(save_directory).expect(&format!(
                     "couldn't save map to {}",
                     save_directory.display()
