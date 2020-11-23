@@ -240,7 +240,7 @@ pub fn main() {
         .add_plugin(bevy::diagnostic::FrameTimeDiagnosticsPlugin::default())
         .add_plugin(bevy::diagnostic::PrintDiagnosticsPlugin::default())
         .add_plugin(VoxelRenderPlugin)
-        // .add_plugin(FlyCameraPlugin)
+        .add_plugin(FlyCameraPlugin)
         .add_startup_system(setup::<Block>)
         .add_resource(DirectionalLight {
             direction: Vec3::new(0.8, -1.0, 0.5).normalize(),
@@ -285,8 +285,8 @@ fn setup<T: Voxel>(
             transform: Transform::from_translation(Vec3::new(0.0, WORLD_HEIGHT as f32 - chunk_size as f32, 0.0))
                 .looking_at(Vec3::default(), Vec3::unit_y()),
             ..Default::default()
-        });
-        // .with(FlyCamera::default());
+        })
+        .with(FlyCamera::default());
 
     if let Some(save_directory) = std::env::args().skip(1).next() {
         let save_directory: &Path = save_directory.as_ref();

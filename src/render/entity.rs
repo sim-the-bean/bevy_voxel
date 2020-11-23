@@ -5,7 +5,7 @@ use bevy::{
     render::{
         draw::Draw,
         mesh::*,
-        pipeline::{PrimitiveTopology, RenderPipeline, RenderPipelines},
+        pipeline::{PipelineSpecialization, PrimitiveTopology, RenderPipeline, RenderPipelines},
         render_graph::base::MainPass,
     },
     transform::prelude::{Transform},
@@ -77,6 +77,7 @@ pub struct ChunkRenderComponents {
     pub draw: Draw,
     pub render_pipelines: RenderPipelines,
     pub transform: Transform,
+    pub global_transform: GlobalTransform,
 }
 
 impl Default for ChunkRenderComponents {
@@ -88,6 +89,7 @@ impl Default for ChunkRenderComponents {
             main_pass: Default::default(),
             draw: Default::default(),
             transform: Default::default(),
+            global_transform: Default::default(),
         }
     }
 }
@@ -138,9 +140,6 @@ pub fn generate_chunk_mesh<T: VoxelExt>(map: &Map<T>, chunk: &Chunk<T>) -> (Opti
         mesh.set_attribute("Voxel_Position", VertexAttributeValues::Float3(positions));
         mesh.set_attribute("Voxel_Shade", VertexAttributeValues::Float(shades));
         mesh.set_attribute("Voxel_Color", VertexAttributeValues::Float4(colors));
-        // mesh.set_attribute("Voxel_Position", VertexAttributeValues::from(positions));
-        // mesh.set_attribute("Voxel_Shade", VertexAttributeValues::from(shades));
-        // mesh.set_attribute("Voxel_Color", VertexAttributeValues::from(colors));
         mesh.set_indices(Some(Indices::U32(indices)));
 
         Some(mesh)
@@ -153,9 +152,6 @@ pub fn generate_chunk_mesh<T: VoxelExt>(map: &Map<T>, chunk: &Chunk<T>) -> (Opti
         mesh.set_attribute("Voxel_Position", VertexAttributeValues::Float3(t_positions));
         mesh.set_attribute("Voxel_Shade", VertexAttributeValues::Float(t_shades));
         mesh.set_attribute("Voxel_Color", VertexAttributeValues::Float4(t_colors));
-        // mesh.set_attribute("Voxel_Position", VertexAttributeValues::from(t_positions));
-        // mesh.set_attribute("Voxel_Shade", VertexAttributeValues::from(t_shades));
-        // mesh.set_attribute("Voxel_Color", VertexAttributeValues::from(t_colors));
         mesh.set_indices(Some(Indices::U32(t_indices)));
 
         Some(mesh)
