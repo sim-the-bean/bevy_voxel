@@ -17,9 +17,13 @@ int_traits = "0.1"
 rstar = "0.8"
 either = "1.6"
 rayon = "1.4"
-bevy = "0.3.0"
-bevy_fly_camera = "0.5.0"
 uuid = "0.8.1"
+
+[dependencies.bevy]
+git = "https://github.com/bevyengine/bevy.git"
+
+[dependencies.bevy_fly_camera]
+path = "../bevy_fly_camera"
 
 [dependencies.serde]
 version = "1.0"

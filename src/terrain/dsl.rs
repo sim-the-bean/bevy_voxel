@@ -129,7 +129,7 @@ impl Display for Value {
             Self::Unit => write!(f, "unit"),
             Self::Bool(x) => write!(f, "{}", x),
             Self::Float(x) => write!(f, "{}", x),
-            Self::Float3(x) => write!(f, "({}, {}, {})", x.x(), x.y(), x.z()),
+            Self::Float3(x) => write!(f, "({}, {}, {})", x.x, x.y, x.z),
         }
     }
 }
@@ -230,9 +230,9 @@ impl Rem for Value {
             Self::Float3(this) => {
                 let other = other.as_float3();
                 Self::Float3(Vec3::new(
-                    this.x() % other.x(),
-                    this.y() % other.y(),
-                    this.z() % other.z(),
+                    this.x % other.x,
+                    this.y % other.y,
+                    this.z % other.z,
                 ))
             }
             _ => type_error!(self, Type::Float),
@@ -495,7 +495,7 @@ impl<T: Voxel> Statement<T> {
         let block = match self {
             Self::SetBlock { q, block } => q.execute(rng, xz, chunk).map(move |v| {
                 let pos = v.as_float3();
-                let (x, y, z) = (pos.x() as i32, pos.y() as i32, pos.z() as i32);
+                let (x, y, z) = (pos.x as i32, pos.y as i32, pos.z as i32);
                 BlockDiff {
                     at: (x, y, z),
                     size: (1, 1, 1),

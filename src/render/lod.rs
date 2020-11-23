@@ -14,13 +14,14 @@ pub fn lod_update<T: Voxel>(
     let (camera_x, camera_y, camera_z) = if let Some(camera) = camera.get(base::camera::CAMERA3D) {
         let position = transform.get(camera).unwrap();
         (
-            position.translation.x() as i32,
-            position.translation.y() as i32,
-            position.translation.z() as i32,
+            position.translation.x as i32,
+            position.translation.y as i32,
+            position.translation.z as i32,
         )
     } else {
         (0, 0, 0)
     };
+
     for (mut map, mut update) in query.iter_mut() {
         for chunk in &mut map.iter_mut() {
             let (x, y, z) = chunk.position();

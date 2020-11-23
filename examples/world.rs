@@ -9,11 +9,12 @@ use bevy::app::AppExit;
 
 use bevy::{
     prelude::*,
+    ecs::Commands,
     render::mesh::Mesh,
-    render::{camera::ActiveCameras, render_graph::base},
+    render::{camera::ActiveCameras, render_graph::base, entity::Camera3dBundle},
 };
 
-use bevy_fly_camera::FlyCamera;
+use bevy_fly_camera::{FlyCamera, FlyCameraPlugin};
 
 use bevy_voxel::{
     collections::lod_tree::Voxel,
@@ -238,9 +239,9 @@ pub fn main() {
         .add_plugins(DefaultPlugins)
         .add_plugin(bevy::diagnostic::FrameTimeDiagnosticsPlugin::default())
         .add_plugin(bevy::diagnostic::PrintDiagnosticsPlugin::default())
-        .add_plugin(VoxelRenderPlugin::default())
-        .add_plugin(bevy_fly_camera::FlyCameraPlugin)
-        .add_startup_system(setup::<Block>.system())
+        .add_plugin(VoxelRenderPlugin)
+        // .add_plugin(FlyCameraPlugin)
+        .add_startup_system(setup::<Block>)
         .add_resource(DirectionalLight {
             direction: Vec3::new(0.8, -1.0, 0.5).normalize(),
             intensity: 0.8,
@@ -253,34 +254,39 @@ pub fn main() {
         .add_stage_after("stage_terrain_generation", "stage_lod_update")
         .add_system_to_stage(
             "stage_terrain_generation",
-            terrain_generation::<Block>.system(),
+            terrain_generation::<Block>,
         )
-        .add_system_to_stage("stage_lod_update", lod_update::<Block>.system())
-        .add_system_to_stage(stage::UPDATE, infinite_update::<Block>.system())
+        .add_system_to_stage("stage_lod_update", lod_update::<Block>)
+        .add_system_to_stage(stage::UPDATE, infinite_update::<Block>)
         .add_system_to_stage(
             stage::UPDATE,
-            light_map_update::<Block, line_drawing::Bresenham3d<i32>>.system(),
+            light_map_update::<Block, line_drawing::Bresenham3d<i32>>,
         )
-        .add_system_to_stage(stage::UPDATE, shaded_light_update::<Block>.system())
-        //.add_system_to_stage(stage::UPDATE, simple_light_update::<Block>.system())
-        .add_system_to_stage(stage::POST_UPDATE, chunk_update::<Block>.system())
-        .add_system_to_stage(stage::POST_UPDATE, save_game::<Block>.system())
+        .add_system_to_stage(stage::UPDATE, shaded_light_update::<Block>)
+        // .add_system_to_stage(stage::UPDATE, simple_light_update::<Block>)
+        .add_system_to_stage(stage::POST_UPDATE, chunk_update::<Block>)
+        .add_system_to_stage(stage::POST_UPDATE, save_game::<Block>)
         .run();
 }
 
 /// set up a simple 3D scene
-fn setup<T: Voxel>(mut commands: Commands, params: Res<Program<T>>, mut height_map: ResMut<HeightMap>) {
+fn setup<T: Voxel>(
+    commands: &mut Commands,
+    params: Res<Program<T>>,
+    mut height_map: ResMut<HeightMap>,
+) {
     let mut update = MapUpdates::default();
     let chunk_size = 2_i32.pow(CHUNK_SIZE as u32);
     let world_width_2 = WORLD_WIDTH / chunk_size / 2;
     let world_height = WORLD_HEIGHT / chunk_size;
 
     commands
-        .spawn(Camera3dComponents {
-            transform: Transform::from_translation(Vec3::new(0.0, WORLD_HEIGHT as f32 - chunk_size as f32, 0.0)),
+        .spawn(Camera3dBundle {
+            transform: Transform::from_translation(Vec3::new(0.0, WORLD_HEIGHT as f32 - chunk_size as f32, 0.0))
+                .looking_at(Vec3::default(), Vec3::unit_y()),
             ..Default::default()
-        })
-        .with(FlyCamera::default());
+        });
+        // .with(FlyCamera::default());
 
     if let Some(save_directory) = std::env::args().skip(1).next() {
         let save_directory: &Path = save_directory.as_ref();
@@ -338,7 +344,7 @@ fn setup<T: Voxel>(mut commands: Commands, params: Res<Program<T>>, mut height_m
 }
 
 fn chunk_update<T: VoxelExt>(
-    mut commands: Commands,
+    commands: &mut Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<VoxelMaterial>>,
     mut maps: Query<(&mut Map<T>, &mut MapUpdates)>,
@@ -348,7 +354,7 @@ fn chunk_update<T: VoxelExt>(
         let mut remove = Vec::new();
         for (&(x, y, z), update) in &update.updates {
             match update {
-                ChunkUpdate::UpdateMesh => {}
+                ChunkUpdate::UpdateMesh => {},
                 _ => continue,
             }
             remove.push((x, y, z));
@@ -405,8 +411,8 @@ pub fn infinite_update<T: Voxel>(
     let (camera_x, camera_z) = if let Some(camera) = camera.get(base::camera::CAMERA3D) {
         let position = transform.get(camera).unwrap();
         (
-            position.translation.x() as i32,
-            position.translation.z() as i32,
+            position.translation.x as i32,
+            position.translation.z as i32,
         )
     } else {
         (0, 0)
@@ -444,12 +450,12 @@ pub struct ExitListenerState {
 fn save_game<T: VoxelExt + Serialize + DeserializeOwned>(
     mut state: ResMut<ExitListenerState>,
     exit_events: Res<Events<AppExit>>,
-    mut query: Query<&Map<T>>,
+    query: Query<&Map<T>>,
 ) {
     if let Some(_) = state.reader.iter(&exit_events).next() {
         if let Some(save_directory) = std::env::args().skip(1).next() {
             let save_directory: &Path = save_directory.as_ref();
-            for map in query.iter_mut() {
+            for map in query.iter() {
                 map.save(save_directory).expect(&format!(
                     "couldn't save map to {}",
                     save_directory.display()
