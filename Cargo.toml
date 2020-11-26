@@ -19,9 +19,9 @@ either = "1.6"
 rayon = "1.4"
 
 [dependencies.bevy]
-path = "../bevy"
+git = "https://github.com/bevyengine/bevy.git"
 
-[dev-dependencies.bevy_fly_camera]
+[dependencies.bevy_fly_camera]
 path = "../bevy_fly_camera"
 
 [dependencies.serde]

@@ -20,10 +20,11 @@ pub struct VoxelRenderPlugin;
 
 impl Plugin for VoxelRenderPlugin {
     fn build(&self, app: &mut AppBuilder) {
-        app.add_asset::<VoxelMaterial>().add_system_to_stage(
-            stage::POST_UPDATE,
-            shader::asset_shader_defs_system::<VoxelMaterial>.system(),
-        );
+        app.add_asset::<VoxelMaterial>()
+            .add_system_to_stage(
+                stage::POST_UPDATE,
+                shader::asset_shader_defs_system::<VoxelMaterial>,
+            );
         let resources = app.resources();
         let mut render_graph = resources.get_mut::<RenderGraph>().unwrap();
         render_graph::add_voxel_graph(&mut render_graph, resources);

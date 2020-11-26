@@ -73,11 +73,11 @@ pub struct Block {
 
 impl Block {
     pub fn solid(&self) -> bool {
-        self.mesh_type == MeshType::Cube && self.color.a == 1.0
+        self.mesh_type == MeshType::Cube && self.color.a() == 1.0
     }
     
     pub fn transparent(&self) -> bool {
-        self.color.a < 1.0
+        self.color.a() < 1.0
     }
 
     fn mesh_cube(
@@ -141,7 +141,7 @@ impl Block {
             colors.extend(&c);
         }
 
-        let transparent = self.color.a < 1.0;
+        let transparent = self.color.a() < 1.0;
 
         MeshPart {
             positions,
@@ -200,7 +200,7 @@ impl Block {
             0, 1, 2, 2, 3, 0, 4, 5, 6, 6, 7, 4, 8, 9, 10, 10, 11, 8, 12, 13, 14, 14, 15, 12,
         ];
         
-        let transparent = self.color.a < 1.0;
+        let transparent = self.color.a() < 1.0;
 
         MeshPart {
             positions,
